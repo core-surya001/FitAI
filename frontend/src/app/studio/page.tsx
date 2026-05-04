@@ -1,19 +1,31 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Upload, Sparkles, Image as ImageIcon, Shirt, RefreshCw, Download, Zap, Loader2, Trash2 } from "lucide-react";
 import { useAuthStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 
+interface Asset {
+  id: string | number;
+  name: string;
+  url: string;
+  type: "default" | "custom";
+}
+
+interface TryonHistory {
+  id: string | number;
+  result_url: string;
+}
+
 // Dummy Data from Unsplash
-const DEFAULT_MODELS = [
+const DEFAULT_MODELS: Asset[] = [
   { id: "m1", name: "Female Model", url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop", type: "default" },
   { id: "m2", name: "Male Model", url: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=400&auto=format&fit=crop", type: "default" },
 ];
 
-const DEFAULT_GARMENTS = [
+const DEFAULT_GARMENTS: Asset[] = [
   { id: "g1", name: "White T-Shirt", url: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=400&auto=format&fit=crop", type: "default" },
   { id: "g2", name: "Leather Jacket", url: "https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=400&auto=format&fit=crop", type: "default" },
   { id: "g3", name: "Summer Dress", url: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?q=80&w=400&auto=format&fit=crop", type: "default" },
@@ -24,12 +36,12 @@ export default function StudioPage() {
   const router = useRouter();
   const { user, isAuthenticated, deductCredits } = useAuthStore();
   
-  const [selectedModel, setSelectedModel] = useState<any>(null);
-  const [selectedGarment, setSelectedGarment] = useState<any>(null);
+  const [selectedModel, setSelectedModel] = useState<Asset | null>(null);
+  const [selectedGarment, setSelectedGarment] = useState<Asset | null>(null);
   
-  const [userModels, setUserModels] = useState<any[]>([]);
-  const [userGarments, setUserGarments] = useState<any[]>([]);
-  const [tryonHistory, setTryonHistory] = useState<any[]>([]);
+  const [userModels, setUserModels] = useState<Asset[]>([]);
+  const [userGarments, setUserGarments] = useState<Asset[]>([]);
+  const [tryonHistory, setTryonHistory] = useState<TryonHistory[]>([]);
 
   const [isUploadingModel, setIsUploadingModel] = useState(false);
   const [isUploadingGarment, setIsUploadingGarment] = useState(false);
@@ -41,7 +53,7 @@ export default function StudioPage() {
   const modelInputRef = useRef<HTMLInputElement>(null);
   const garmentInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchUserAssets = async () => {
+  const fetchUserAssets = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
       const [photosRes, garmentsRes, historyRes] = await Promise.all([
@@ -49,17 +61,17 @@ export default function StudioPage() {
         api.get("/garments/"),
         api.get("/tryon/history")
       ]);
-      setUserModels(photosRes.data.map((p: any) => ({ ...p, url: `http://localhost:8000/${p.file_path}`, type: "custom" })));
-      setUserGarments(garmentsRes.data.map((g: any) => ({ ...g, url: `http://localhost:8000/${g.file_path}`, type: "custom" })));
+      setUserModels(photosRes.data.map((p: {id: string, file_path: string}) => ({ ...p, name: "Model", url: `http://localhost:8000/${p.file_path}`, type: "custom" })));
+      setUserGarments(garmentsRes.data.map((g: {id: string, file_path: string}) => ({ ...g, name: "Garment", url: `http://localhost:8000/${g.file_path}`, type: "custom" })));
       setTryonHistory(historyRes.data);
     } catch (err) {
       console.error("Failed to fetch assets", err);
     }
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    fetchUserAssets();
-  }, [isAuthenticated]);
+    fetchUserAssets(); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [fetchUserAssets]);
 
   const handleUploadModel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !isAuthenticated) return;
@@ -165,9 +177,10 @@ export default function StudioPage() {
         } else {
           setError("Generated image URL is missing.");
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setIsGenerating(false);
-        setError(err.response?.data?.detail || "Failed to generate try-on. Please try again.");
+        const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Failed to generate try-on. Please try again.";
+        setError(errorMessage);
       }
     };
     
@@ -348,7 +361,7 @@ export default function StudioPage() {
               Your Recent Looks
             </h3>
             <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-2">
-              {tryonHistory.map((job: any) => (
+              {tryonHistory.map((job: TryonHistory) => (
                 <div 
                   key={job.id} 
                   onClick={() => setResultImage(job.result_url)} 

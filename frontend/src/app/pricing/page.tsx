@@ -96,8 +96,9 @@ export default function PricingPage() {
           setIsProcessing(false);
           router.push("/studio");
         }, 2000);
-      } catch (err: any) {
-        setError(err.response?.data?.detail || "Payment Failed.");
+      } catch (err: unknown) {
+        const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Payment Failed.";
+        setError(errorMessage);
         setIsProcessing(false);
       }
     }, 2000);

@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles, UploadCloud, Images, Zap, User } from "lucide-react";
+import { ArrowRight, Sparkles, UploadCloud, Zap, User } from "lucide-react";
 
 export default function Home() {
   return (

@@ -25,7 +25,7 @@ function LoginContent() {
   useEffect(() => {
     // If URL has ?signup=true, default to Signup view
     if (searchParams.get("signup") === "true") {
-      setIsLogin(false);
+      setIsLogin(false); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [searchParams]);
 
@@ -54,9 +54,10 @@ function LoginContent() {
       // Redirect to Studio
       router.push("/studio");
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.response?.data?.detail || "An error occurred. Please try again.");
+      const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "An error occurred. Please try again.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
