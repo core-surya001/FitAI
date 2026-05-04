@@ -9,9 +9,13 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./virtual_tryon.db")
 
 # connect_args is needed only for SQLite to allow multi-threaded access
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
-)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    # Handle Render's default 'postgres://' which should be 'postgresql://' for SQLAlchemy
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    engine = create_engine(DATABASE_URL)
 
 # Each request gets its own database session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
