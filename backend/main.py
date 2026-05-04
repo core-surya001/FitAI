@@ -45,12 +45,12 @@ app.add_middleware(
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # ── Register all API routers ─────────────────────────────────────────────────
-app.include_router(auth_routes.router)
-app.include_router(photo_routes.router)
-app.include_router(garment_routes.router)
-app.include_router(tryon_routes.router)
-app.include_router(credit_routes.router)
-app.include_router(stylist_routes.router)
+app.include_router(auth_routes.router, prefix="/api")
+app.include_router(photo_routes.router, prefix="/api")
+app.include_router(garment_routes.router, prefix="/api")
+app.include_router(tryon_routes.router, prefix="/api")
+app.include_router(credit_routes.router, prefix="/api")
+app.include_router(stylist_routes.router, prefix="/api")
 
 
 # ── Health check endpoint ────────────────────────────────────────────────────
