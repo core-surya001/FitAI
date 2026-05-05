@@ -42,8 +42,18 @@ function LoginContent() {
         
       } else {
         // Signup API Call
-        await api.post("/auth/signup", { full_name: fullName, email, password });
-        // After signup, automatically login
+        try {
+          await api.post("/auth/signup", { full_name: fullName, email, password });
+        } catch (signupErr: any) {
+          // If the email already exists (409), just proceed to login seamlessly
+          if (signupErr.response?.status === 409) {
+            console.log("Email already exists. Seamlessly authenticating...");
+          } else {
+            throw signupErr;
+          }
+        }
+        
+        // After signup (or if email existed), automatically login
         const loginResponse = await api.post("/auth/login", { email, password });
         localStorage.setItem("token", loginResponse.data.access_token);
       }
@@ -54,9 +64,19 @@ function LoginContent() {
       // Redirect to Studio
       router.push("/studio");
       
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error(err);
-      const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "An error occurred. Please try again.";
+      
+      // Extract detailed error message
+      let errorMessage = "An error occurred. Please try again.";
+      if (err.code === "ERR_NETWORK") {
+        errorMessage = "Network error: Unable to connect to the server. Please check your connection.";
+      } else if (err.response?.data?.detail) {
+        errorMessage = typeof err.response.data.detail === "string" 
+          ? err.response.data.detail 
+          : JSON.stringify(err.response.data.detail);
+      }
+      
       setError(errorMessage);
     } finally {
       setIsLoading(false);
