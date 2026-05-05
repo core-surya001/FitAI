@@ -6,10 +6,13 @@ from typing import List, Dict
 router = APIRouter(prefix="/api/stylist", tags=["AI Stylist"])
 
 # Configure Gemini
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Support both standard naming and the one found in user's Render dashboard
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("Gemini_api")
+
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    # gemini-1.5-flash is the stable fast model
+    model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     model = None
 

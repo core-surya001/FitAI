@@ -6,7 +6,8 @@ import os
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./virtual_tryon.db")
+# Support both standard naming and the typo found in user's Render dashboard
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("Daabase_url") or "sqlite:///./virtual_tryon.db"
 
 # connect_args is needed only for SQLite to allow multi-threaded access
 if DATABASE_URL.startswith("sqlite"):

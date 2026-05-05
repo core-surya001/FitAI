@@ -35,7 +35,7 @@ def generate_tryon(
 
     # 3. Call Gradio (Free AI Model - IDM-VTON)
     try:
-        hf_token = os.getenv("HF_TOKEN")
+        hf_token = os.getenv("HF_TOKEN") or os.getenv("HF_token")
         client = Client(HF_SPACE, token=hf_token)
         
         # IDM-VTON requires an Imageeditor dict for the model image
