@@ -86,49 +86,105 @@ def get_credit_history(
     )
 
 
-@router.post("/subscribe/{plan_name}")
-def subscribe_to_plan(
+@router.post("/create-order/{plan_name}")
+def create_order(
     plan_name: str,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    """
-    MOCK subscription endpoint.
+    import os
+    import razorpay
+    from fastapi import HTTPException
+    
+    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "dummy_key")
+    razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET", "dummy_secret")
+    
+    # Initialize razorpay client
+    client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
 
-    In production, this should:
-    1. Create a Razorpay/Stripe checkout session.
-    2. Return a payment URL to redirect the user.
-    3. Use a webhook to confirm payment before granting credits.
+    plan_prices_inr = {"pro": 499, "unlimited": 1499}
 
-    For now, it simulates a successful subscription.
-    """
-    plan_credits = {"pro": 500, "unlimited": 999999}
-
-    if plan_name not in plan_credits:
-        from fastapi import HTTPException
+    if plan_name not in plan_prices_inr:
         raise HTTPException(status_code=400, detail=f"Invalid plan: '{plan_name}'. Choose 'pro' or 'unlimited'.")
 
-    credits_to_add = plan_credits[plan_name]
+    amount = plan_prices_inr[plan_name] * 100  # Amount in paise (1 INR = 100 paise)
 
-    # Update user subscription and credits
-    current_user.subscription = plan_name
-    if plan_name != "unlimited":
+    try:
+        # Create order
+        order_data = {
+            "amount": amount,
+            "currency": "INR",
+            "receipt": f"receipt_{current_user.id}_{plan_name}",
+            "notes": {
+                "plan_name": plan_name,
+                "user_id": current_user.id
+            }
+        }
+        order = client.order.create(data=order_data)
+        
+        return {
+            "order_id": order["id"],
+            "amount": order["amount"],
+            "currency": order["currency"],
+            "key_id": razorpay_key_id,
+            "plan_name": plan_name
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Razorpay order creation failed: {str(e)}")
+
+
+from pydantic import BaseModel
+class PaymentVerification(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    plan_name: str
+
+@router.post("/verify-payment")
+def verify_payment(
+    payment_data: PaymentVerification,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    import os
+    import razorpay
+    from fastapi import HTTPException
+    
+    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "dummy_key")
+    razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET", "dummy_secret")
+    client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
+
+    try:
+        # Verify the signature
+        client.utility.verify_payment_signature({
+            'razorpay_order_id': payment_data.razorpay_order_id,
+            'razorpay_payment_id': payment_data.razorpay_payment_id,
+            'razorpay_signature': payment_data.razorpay_signature
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Payment verification failed.")
+
+    # Payment is verified, update the user's subscription
+    plan_credits = {"pro": 500, "unlimited": 999999}
+    credits_to_add = plan_credits.get(payment_data.plan_name, 0)
+
+    current_user.subscription = payment_data.plan_name
+    if payment_data.plan_name != "unlimited":
         current_user.credits += credits_to_add
     else:
         current_user.credits = 999999  # Effectively unlimited
 
-    # Log the transaction
     txn = models.CreditTransaction(
         user_id = current_user.id,
         amount  = credits_to_add,
-        reason  = f"subscription_{plan_name}"
+        reason  = f"subscription_{payment_data.plan_name}_payment_verified"
     )
     db.add(txn)
     db.commit()
     db.refresh(current_user)
 
     return {
-        "message": f"Successfully subscribed to {plan_name} plan!",
+        "message": f"Payment successful! Subscribed to {payment_data.plan_name} plan.",
         "new_credits": current_user.credits,
         "subscription": current_user.subscription
     }

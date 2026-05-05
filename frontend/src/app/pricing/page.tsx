@@ -7,6 +7,22 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import api from "@/lib/api";
 
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 const plans = [
   {
     id: "free",
@@ -68,148 +84,109 @@ export default function PricingPage() {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleOpenGateway = (planId: string) => {
+  const handleOpenGateway = async (planId: string) => {
     if (!isAuthenticated) {
       router.push("/login?signup=true");
       return;
     }
     if (planId === "free") return;
-    setSelectedPlan(planId);
-  };
-
-  const handlePaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPlan) return;
     
     setIsProcessing(true);
     setError(null);
 
-    // Simulate 2 seconds of payment gateway verification
-    setTimeout(async () => {
-      try {
-        await api.post(`/credits/subscribe/${selectedPlan}`);
-        await fetchUser();
-        setPaymentSuccess(true);
-        setTimeout(() => {
-          setSelectedPlan(null);
-          setPaymentSuccess(false);
-          setIsProcessing(false);
-          router.push("/studio");
-        }, 2000);
-      } catch (err: unknown) {
-        const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Payment Failed.";
-        setError(errorMessage);
-        setIsProcessing(false);
-      }
-    }, 2000);
+    const res = await loadRazorpayScript();
+    if (!res) {
+      setError("Failed to load Razorpay SDK. Please check your connection.");
+      setIsProcessing(false);
+      return;
+    }
+
+    try {
+      // Create order
+      const orderResponse = await api.post(`/credits/create-order/${planId}`);
+      const orderData = orderResponse.data;
+
+      const options = {
+        key: orderData.key_id, 
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: "FitAI Subscription",
+        description: `Subscribe to ${planId} plan`,
+        order_id: orderData.order_id,
+        handler: async function (response: any) {
+          try {
+            await api.post("/credits/verify-payment", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              plan_name: planId
+            });
+            await fetchUser();
+            setPaymentSuccess(true);
+            setTimeout(() => {
+              setPaymentSuccess(false);
+              router.push("/studio");
+            }, 3000);
+          } catch (err) {
+            setError("Payment verification failed.");
+          }
+        },
+        prefill: {
+          name: user?.full_name || "",
+          email: user?.email || "",
+        },
+        theme: {
+          color: "#8B5CF6"
+        }
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      paymentObject.on('payment.failed', function (response: any) {
+        setError(response.error.description || "Payment failed");
+      });
+      paymentObject.open();
+
+    } catch (err: unknown) {
+      const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Failed to initiate payment.";
+      setError(errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
     <div className="w-full max-w-7xl mx-auto px-6 py-24 flex flex-col items-center relative">
       
-      {/* ── Payment Gateway Modal ── */}
+      {/* ── Status Messages ── */}
       <AnimatePresence>
-        {selectedPlan && (
+        {paymentSuccess && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-md bg-dark-card border border-white/10 rounded-2xl shadow-2xl overflow-hidden relative"
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              className="bg-dark-card border border-white/10 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl"
             >
-              <div className="p-6 border-b border-white/5 flex justify-between items-center bg-black/20">
-                <div className="flex items-center gap-2 text-white">
-                  <Lock className="w-4 h-4 text-brand-400" />
-                  <span className="font-semibold">Secure Checkout</span>
-                </div>
-                {!isProcessing && !paymentSuccess && (
-                  <button onClick={() => setSelectedPlan(null)} className="text-gray-400 hover:text-white">
-                    <X className="w-5 h-5" />
-                  </button>
-                )}
+              <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mb-4 border border-green-500/30">
+                <Check className="w-8 h-8" />
               </div>
-
-              <div className="p-6">
-                {paymentSuccess ? (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex flex-col items-center text-center py-8"
-                  >
-                    <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mb-4 border border-green-500/30">
-                      <Check className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">Payment Successful!</h3>
-                    <p className="text-gray-400">Your account has been upgraded and credits added.</p>
-                  </motion.div>
-                ) : (
-                  <form onSubmit={handlePaymentSubmit} className="space-y-4">
-                    
-                    {error && (
-                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        <p>{error}</p>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center mb-6 p-4 rounded-xl bg-brand-500/10 border border-brand-500/20">
-                      <div>
-                        <p className="text-gray-400 text-sm">Selected Plan</p>
-                        <p className="text-white font-bold capitalize">{selectedPlan} Plan</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-bold text-brand-400">
-                          {plans.find(p => p.id === selectedPlan)?.price}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-gray-400 font-semibold uppercase mb-1 block">Card Number</label>
-                      <div className="relative">
-                        <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                        <input type="text" required placeholder="0000 0000 0000 0000" className="w-full bg-black/50 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-brand-500" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs text-gray-400 font-semibold uppercase mb-1 block">Expiry Date</label>
-                        <input type="text" required placeholder="MM/YY" className="w-full bg-black/50 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:border-brand-500" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-400 font-semibold uppercase mb-1 block">CVV</label>
-                        <input type="password" required placeholder="123" className="w-full bg-black/50 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:border-brand-500" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-gray-400 font-semibold uppercase mb-1 block">Cardholder Name</label>
-                      <input type="text" required placeholder="John Doe" className="w-full bg-black/50 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:border-brand-500" />
-                    </div>
-
-                    <button 
-                      type="submit" 
-                      disabled={isProcessing}
-                      className="w-full py-3.5 mt-6 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold transition-all shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:-translate-y-0.5 disabled:opacity-50 flex justify-center"
-                    >
-                      {isProcessing ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        `Pay ${plans.find(p => p.id === selectedPlan)?.price}`
-                      )}
-                    </button>
-                    <p className="text-center text-xs text-gray-500 mt-4 flex justify-center items-center gap-1">
-                      <Lock className="w-3 h-3" /> Secure 256-bit SSL encryption
-                    </p>
-                  </form>
-                )}
-              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">Payment Successful!</h3>
+              <p className="text-gray-400">Your account has been upgraded. Redirecting...</p>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-      {/* ── End Modal ── */}
+      
+      {error && (
+        <div className="fixed top-24 z-50 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-red-400 text-sm max-w-md mx-auto shadow-xl">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <p>{error}</p>
+          <button onClick={() => setError(null)} className="ml-auto text-gray-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      {/* ── End Status Messages ── */}
 
       <div className="text-center mb-12 max-w-2xl">
         <h1 className="text-4xl md:text-5xl font-bold font-outfit text-white mb-4">Simple, Transparent Pricing</h1>
