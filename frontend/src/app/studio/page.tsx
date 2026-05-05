@@ -61,9 +61,20 @@ export default function StudioPage() {
         api.get("/garments/"),
         api.get("/tryon/history")
       ]);
-      setUserModels(photosRes.data.map((p: {id: string, file_path: string}) => ({ ...p, name: "Model", url: `http://localhost:8000/${p.file_path}`, type: "custom" })));
-      setUserGarments(garmentsRes.data.map((g: {id: string, file_path: string}) => ({ ...g, name: "Garment", url: `http://localhost:8000/${g.file_path}`, type: "custom" })));
-      setTryonHistory(historyRes.data);
+      
+      const baseURL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
+      
+      setUserModels(photosRes.data.map((p: {id: string, file_path: string}) => ({ ...p, name: "Model", url: `${baseURL}/${p.file_path}`, type: "custom" })));
+      setUserGarments(garmentsRes.data.map((g: {id: string, file_path: string}) => ({ ...g, name: "Garment", url: `${baseURL}/${g.file_path}`, type: "custom" })));
+      
+      // Forcefully fix any 'localhost' URLs that might be saved in the database history
+      const fixedHistory = historyRes.data.map((job: TryonHistory) => {
+        if (job.result_url && job.result_url.includes('localhost:8000')) {
+          return { ...job, result_url: job.result_url.replace('http://localhost:8000', baseURL) };
+        }
+        return job;
+      });
+      setTryonHistory(fixedHistory);
     } catch (err) {
       console.error("Failed to fetch assets", err);
     }
