@@ -45,15 +45,18 @@ function LoginContent() {
         try {
           await api.post("/auth/signup", { full_name: fullName, email, password });
         } catch (signupErr: any) {
-          // If the email already exists (409), just proceed to login seamlessly
+          // If the email already exists (409)
           if (signupErr.response?.status === 409) {
-            console.log("Email already exists. Seamlessly authenticating...");
+            setError("Email already registered. Please sign in.");
+            setIsLogin(true); // Automatically switch to Login mode
+            setIsLoading(false);
+            return; // Stop execution here
           } else {
             throw signupErr;
           }
         }
         
-        // After signup (or if email existed), automatically login
+        // After successful signup, automatically login
         const loginResponse = await api.post("/auth/login", { email, password });
         localStorage.setItem("token", loginResponse.data.access_token);
       }
@@ -71,6 +74,8 @@ function LoginContent() {
       let errorMessage = "An error occurred. Please try again.";
       if (err.code === "ERR_NETWORK") {
         errorMessage = "Network error: Unable to connect to the server. Please check your connection.";
+      } else if (err.response?.status === 401) {
+        errorMessage = "Incorrect email or password.";
       } else if (err.response?.data?.detail) {
         errorMessage = typeof err.response.data.detail === "string" 
           ? err.response.data.detail 
