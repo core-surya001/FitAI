@@ -96,8 +96,8 @@ def create_order(
     import razorpay
     from fastapi import HTTPException
     
-    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "dummy_key")
-    razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET", "dummy_secret")
+    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID") or os.getenv("RAZORPAY_KEY") or "dummy_key"
+    razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET") or os.getenv("RAZORPAY_SECRET") or "dummy_secret"
     
     # Initialize razorpay client
     client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
@@ -150,8 +150,8 @@ def verify_payment(
     import razorpay
     from fastapi import HTTPException
     
-    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID", "dummy_key")
-    razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET", "dummy_secret")
+    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID") or os.getenv("RAZORPAY_KEY") or "dummy_key"
+    razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET") or os.getenv("RAZORPAY_SECRET") or "dummy_secret"
     client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
 
     try:
