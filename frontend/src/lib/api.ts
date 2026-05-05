@@ -4,6 +4,8 @@ const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api', // FastAPI Backend URL
 });
 
+console.log("🛠️ Frontend API Base URL is currently set to:", process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api');
+
 // Add a request interceptor to inject the JWT token
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
