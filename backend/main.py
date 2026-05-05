@@ -32,8 +32,8 @@ app = FastAPI(
 
 # ── CORS Middleware (allows React frontend to call this API) ─────────────────
 origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
-# Robust parsing: strip whitespace and trailing slashes
-allowed_origins = [origin.strip().rstrip("/") for origin in origins_env.split(",") if origin.strip()]
+# Robust parsing: strip whitespace, quotes, and trailing slashes
+allowed_origins = [origin.strip().strip("'").strip('"').rstrip("/") for origin in origins_env.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
