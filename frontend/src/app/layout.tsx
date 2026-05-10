@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import MainWrapper from "@/components/MainWrapper";
 
-// Using modern fonts for a premium look
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
+const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair" });
 
 export const metadata: Metadata = {
   title: "FitAI - Virtual Try-On Studio",
@@ -18,13 +18,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${outfit.variable} h-full antialiased dark`}>
-      <body className="min-h-full flex flex-col pt-20">
-        {/* We add pt-20 because Navbar is fixed at the top */}
+    <html lang="en" className={`${inter.variable} ${playfair.variable} h-full antialiased`}>
+      <body className="min-h-full flex flex-col font-sans">
         <Navbar />
-        <main className="flex-1 w-full relative z-10">
+        <MainWrapper>
           {children}
-        </main>
+        </MainWrapper>
       </body>
     </html>
   );

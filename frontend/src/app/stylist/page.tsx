@@ -46,7 +46,6 @@ export default function StylistPage() {
     setIsLoading(true);
 
     try {
-      // Send the chat history to the backend
       const response = await api.post("/stylist/chat", {
         message: userMessage.content,
         history: messages.map(m => ({ role: m.role, content: m.content }))
@@ -73,57 +72,60 @@ export default function StylistPage() {
   };
 
   return (
-    <div className="w-full h-[calc(100vh-80px)] max-w-4xl mx-auto p-4 md:p-6 flex flex-col">
-      <div className="text-center mb-6">
-        <h1 className="text-3xl font-bold text-white font-outfit flex items-center justify-center gap-2">
-          <Sparkles className="w-6 h-6 text-brand-400" />
-          AI Personal Stylist
+    <div className="w-full h-[calc(100vh-80px)] max-w-5xl mx-auto px-6 py-12 flex flex-col bg-[#FAF9F6] font-sans">
+      <div className="text-center mb-10">
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400 mb-2">Curated Assistance</p>
+        <h1 className="text-4xl font-serif text-black flex items-center justify-center gap-3">
+          <Sparkles className="w-6 h-6 text-gray-400" />
+          AI Stylist
         </h1>
-        <p className="text-gray-400 text-sm mt-2">Get personalized outfit recommendations based on your unique profile.</p>
+        <p className="text-gray-500 text-sm mt-4 font-sans max-w-lg mx-auto">Discuss your aesthetic goals, upcoming events, or style preferences with our intelligent concierge.</p>
       </div>
 
-      <div className="flex-1 glass-card rounded-2xl border border-white/10 overflow-hidden flex flex-col shadow-2xl">
+      <div className="flex-1 bg-white border border-black/5 flex flex-col shadow-sm overflow-hidden">
         
         {/* Chat Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar bg-[#FAF9F6]/30">
           {messages.map((msg) => (
             <motion.div 
               key={msg.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`flex items-start gap-4 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
+              className={`flex items-start gap-6 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}
             >
               {/* Avatar */}
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 border ${
                 msg.role === "user" 
-                  ? "bg-brand-600 text-white" 
-                  : "bg-white/10 text-brand-400 border border-brand-500/30"
+                  ? "bg-black text-white border-black" 
+                  : "bg-white text-black border-black/5"
               }`}>
                 {msg.role === "user" ? <UserIcon className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
               </div>
 
               {/* Message Bubble */}
-              <div className={`max-w-[80%] rounded-2xl px-5 py-3.5 ${
+              <div className={`max-w-[70%] px-6 py-4 shadow-sm ${
                 msg.role === "user" 
-                  ? "bg-brand-600 text-white rounded-tr-none" 
-                  : "bg-white/5 text-gray-200 border border-white/10 rounded-tl-none leading-relaxed"
+                  ? "bg-black text-white rounded-none" 
+                  : "bg-white text-gray-700 border border-black/5 rounded-none leading-relaxed"
               }`}>
-                {msg.content.split('\n').map((line, i) => (
-                  <p key={i} className={line === "" ? "h-2" : "mb-1 last:mb-0"}>{line}</p>
-                ))}
+                <div className="text-sm font-sans">
+                  {msg.content.split('\n').map((line, i) => (
+                    <p key={i} className={line === "" ? "h-2" : "mb-2 last:mb-0"}>{line}</p>
+                  ))}
+                </div>
               </div>
             </motion.div>
           ))}
 
           {isLoading && (
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-full bg-white/10 text-brand-400 border border-brand-500/30 flex items-center justify-center shrink-0">
+            <div className="flex items-start gap-6">
+              <div className="w-12 h-12 rounded-full bg-white text-black border border-black/5 flex items-center justify-center shrink-0">
                 <Bot className="w-5 h-5" />
               </div>
-              <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-none px-5 py-4 flex items-center gap-2">
-                <div className="w-2 h-2 bg-brand-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <div className="w-2 h-2 bg-brand-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <div className="w-2 h-2 bg-brand-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              <div className="bg-white border border-black/5 px-6 py-5 flex items-center gap-3">
+                <div className="w-1.5 h-1.5 bg-black/20 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <div className="w-1.5 h-1.5 bg-black/20 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <div className="w-1.5 h-1.5 bg-black/20 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
             </div>
           )}
@@ -131,23 +133,26 @@ export default function StylistPage() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-black/40 border-t border-white/5">
-          <form onSubmit={handleSend} className="relative flex items-center">
+        <div className="p-6 bg-white border-t border-black/5">
+          <form onSubmit={handleSend} className="relative flex items-center max-w-3xl mx-auto w-full">
             <input 
               type="text" 
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Describe your body type, occasion, or preferences..."
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-4 pl-5 pr-14 text-white placeholder:text-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all"
+              placeholder="Inquire about styles, occasions, or pairings..."
+              className="w-full bg-[#FAF9F6] border border-black/5 py-5 pl-8 pr-16 text-black placeholder:text-gray-400 focus:outline-none focus:border-black transition-all text-sm"
             />
             <button 
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-lg bg-brand-600 hover:bg-brand-500 flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-black text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-gray-900 flex items-center justify-center"
             >
-              <Send className="w-5 h-5 ml-0.5" />
+              <Send className="w-4 h-4 ml-0.5" />
             </button>
           </form>
+          <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest mt-4 font-bold">
+            Powered by FitAI Neural Stylist
+          </p>
         </div>
       </div>
     </div>

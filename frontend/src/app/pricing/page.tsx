@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Zap, AlertCircle, CreditCard, Lock, X } from "lucide-react";
+import { Check, Zap, AlertCircle, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuthStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
@@ -79,7 +79,6 @@ export default function PricingPage() {
   const { user, isAuthenticated, fetchUser } = useAuthStore();
   const router = useRouter();
   
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +135,7 @@ export default function PricingPage() {
           email: user?.email || "",
         },
         theme: {
-          color: "#8B5CF6"
+          color: "#000000"
         }
       };
 
@@ -155,110 +154,113 @@ export default function PricingPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-6 py-24 flex flex-col items-center relative">
+    <div className="w-full min-h-screen bg-[#FAF9F6] pt-32 pb-24 px-6 flex flex-col items-center relative font-sans">
       
       {/* ── Status Messages ── */}
       <AnimatePresence>
         {paymentSuccess && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.5 }}
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.5 }}
-              className="bg-dark-card border border-white/10 rounded-2xl p-8 flex flex-col items-center text-center shadow-2xl"
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white border border-black/5 rounded-none p-12 flex flex-col items-center text-center shadow-2xl max-w-sm"
             >
-              <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mb-4 border border-green-500/30">
+              <div className="w-16 h-16 bg-black text-white rounded-full flex items-center justify-center mb-6">
                 <Check className="w-8 h-8" />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">Payment Successful!</h3>
-              <p className="text-gray-400">Your account has been upgraded. Redirecting...</p>
+              <h3 className="text-2xl font-serif text-black mb-2">Payment Successful</h3>
+              <p className="text-gray-500 text-sm">Your account has been upgraded. Redirecting to your studio...</p>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
       
       {error && (
-        <div className="fixed top-24 z-50 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-2 text-red-400 text-sm max-w-md mx-auto shadow-xl">
-          <AlertCircle className="w-5 h-5 shrink-0" />
+        <div className="fixed top-24 z-50 p-4 bg-white border border-red-100 flex items-center gap-3 text-red-600 text-xs uppercase tracking-widest font-bold shadow-xl">
+          <AlertCircle className="w-4 h-4 shrink-0" />
           <p>{error}</p>
-          <button onClick={() => setError(null)} className="ml-auto text-gray-400 hover:text-white">
+          <button onClick={() => setError(null)} className="ml-4 text-gray-400 hover:text-black">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
-      {/* ── End Status Messages ── */}
 
-      <div className="text-center mb-12 max-w-2xl">
-        <h1 className="text-4xl md:text-5xl font-bold font-outfit text-white mb-4">Simple, Transparent Pricing</h1>
-        <p className="text-gray-400 text-lg mb-4">
-          Each virtual try-on costs <strong className="text-white">2 credits</strong>. 
-          Start for free, upgrade when you need more magic.
+      <div className="text-center mb-20 max-w-2xl">
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400 mb-4">Investment & Access</p>
+        <h1 className="text-5xl md:text-6xl font-serif text-black mb-8 leading-tight">Elevate Your<br/>Digital Wardrobe</h1>
+        <p className="text-gray-500 text-lg mb-10 leading-relaxed">
+          Experience boundless creativity. Each generation consumes <strong className="text-black">2 credits</strong>. 
+          Choose a plan that fits your rhythm.
         </p>
         
         {user && (
-          <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white/5 border border-white/10">
-            <span className="text-gray-400">Current Plan:</span>
-            <span className="text-white font-bold capitalize">{user.subscription}</span>
-            <span className="mx-2 text-white/20">|</span>
-            <span className="text-gray-400">Balance:</span>
-            <span className="text-brand-400 font-bold">{user.credits} Credits</span>
+          <div className="inline-flex items-center gap-4 px-8 py-4 bg-white border border-black/5 shadow-sm">
+            <div className="flex flex-col items-start">
+              <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Current Plan</span>
+              <span className="text-sm text-black font-serif capitalize">{user.subscription}</span>
+            </div>
+            <div className="w-px h-8 bg-gray-100"></div>
+            <div className="flex flex-col items-start">
+              <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Balance</span>
+              <span className="text-sm text-black font-serif">{user.credits} Credits</span>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
         {plans.map((plan, i) => (
           <motion.div 
             key={plan.name}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className={`glass-card rounded-2xl p-8 relative flex flex-col ${
-              plan.popular ? "border-brand-500 shadow-[0_0_30px_rgba(139,92,246,0.15)] transform md:-translate-y-4" : "border-white/10"
-            } ${user?.subscription === plan.id ? "ring-2 ring-brand-500 ring-offset-4 ring-offset-dark-bg" : ""}`}
+            className={`bg-white p-10 flex flex-col border border-black/5 shadow-sm hover:shadow-md transition-all relative ${
+              plan.popular ? "md:-translate-y-4 ring-1 ring-black" : ""
+            }`}
           >
             {plan.popular && (
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                Most Popular
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black text-white text-[10px] font-bold px-4 py-1.5 uppercase tracking-widest">
+                Recommended
               </div>
             )}
             
-            <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
-            <p className="text-sm text-gray-400 mb-6">{plan.desc}</p>
+            <h3 className="text-xl font-serif text-black mb-2">{plan.name}</h3>
+            <p className="text-xs text-gray-400 mb-8 uppercase tracking-widest font-bold">{plan.credits}</p>
             
-            <div className="mb-6">
-              <span className="text-4xl font-extrabold text-white">{plan.price}</span>
-              {plan.period && <span className="text-gray-400">{plan.period}</span>}
+            <div className="mb-8">
+              <span className="text-4xl font-serif text-black">{plan.price}</span>
+              {plan.period && <span className="text-gray-500 text-sm">{plan.period}</span>}
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-lg border border-white/10 mb-8 w-max">
-              <Zap className="w-4 h-4 text-brand-400" />
-              <span className="text-brand-300 font-medium text-sm">{plan.credits}</span>
-            </div>
+            <p className="text-sm text-gray-500 mb-8 leading-relaxed italic">&ldquo;{plan.desc}&rdquo;</p>
 
-            <ul className="space-y-4 mb-8 flex-1">
+            <ul className="space-y-4 mb-10 flex-1 border-t border-gray-50 pt-8">
               {plan.features.map(f => (
                 <li key={f} className="flex items-start gap-3">
-                  <Check className="w-5 h-5 text-brand-400 shrink-0 mt-0.5" />
-                  <span className="text-gray-300 text-sm">{f}</span>
+                  <Check className="w-4 h-4 text-black shrink-0 mt-0.5" />
+                  <span className="text-gray-600 text-sm">{f}</span>
                 </li>
               ))}
             </ul>
 
             <button 
               onClick={() => handleOpenGateway(plan.id)}
-              disabled={user?.subscription === plan.id || plan.id === "free"}
-              className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center ${
+              disabled={user?.subscription === plan.id || plan.id === "free" || isProcessing}
+              className={`w-full py-4 font-bold uppercase tracking-widest text-[10px] transition-all flex items-center justify-center ${
                 user?.subscription === plan.id
-                  ? "bg-white/5 text-gray-500 cursor-not-allowed border border-white/5"
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : plan.id === "free"
-                    ? "bg-white/10 text-white hover:bg-white/20"
-                    : plan.popular 
-                      ? "bg-brand-600 hover:bg-brand-500 text-white shadow-lg shadow-brand-500/25 hover:-translate-y-0.5" 
-                      : "bg-white/10 hover:bg-white/20 text-white hover:-translate-y-0.5"
+                    ? "bg-gray-50 text-gray-400 cursor-not-allowed"
+                    : "bg-black text-white hover:bg-gray-900 shadow-xl"
               }`}
             >
-              {user?.subscription === plan.id ? "Current Plan" : plan.buttonText}
+              {isProcessing && plan.id !== "free" ? (
+                 <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                user?.subscription === plan.id ? "Active Plan" : plan.buttonText
+              )}
             </button>
           </motion.div>
         ))}
