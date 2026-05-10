@@ -74,6 +74,14 @@ export default function Navbar() {
           >
             Assistant
           </Link>
+          <Link
+            href="/pricing"
+            className={`text-sm font-medium transition-colors hover:text-black ${
+              pathname === "/pricing" ? "text-black border-b border-black pb-1" : "text-gray-500"
+            }`}
+          >
+            Pricing
+          </Link>
         </div>
 
         {/* Right Actions */}
