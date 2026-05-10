@@ -19,9 +19,9 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: BASE_URL
-        value: https://fitai-backend.onrender.com # Update this after deployment if name changes
+        value: https://fitai-backend-4ero.onrender.com
       - key: ALLOWED_ORIGINS
-        value: https://fitai-studio.vercel.app,http://localhost:3000
+        value: https://fitai-backend-4ero.onrender.com,https://fitai-studio.vercel.app,http://localhost:3000
 
 databases:
   - name: fitai-db
