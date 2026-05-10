@@ -21,7 +21,7 @@ services:
       - key: BASE_URL
         value: https://fitai-backend-4ero.onrender.com
       - key: ALLOWED_ORIGINS
-        value: https://fitai-backend-4ero.onrender.com,https://fitai-studio.vercel.app,http://localhost:3000
+        value: https://fit-ai-six-alpha.vercel.app,http://localhost:3000
 
 databases:
   - name: fitai-db
