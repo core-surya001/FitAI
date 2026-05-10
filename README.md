@@ -11,13 +11,34 @@ FitAI is a cutting-edge web application that allows users to virtually try on cl
 - **Recent Looks History:** Save, view, download, and delete previously generated AI looks.
 - **Responsive Modern UI:** A beautiful, "Glassmorphism" styled interface built with Next.js, Tailwind CSS, and Framer Motion animations.
 
-## 🛠️ Technology Stack
+## 🚀 Deployment
 
-### **Frontend**
-- **Framework:** Next.js 14+ (App Router, React)
-- **Styling:** Tailwind CSS, Framer Motion
-- **State Management:** Zustand
-- **Icons:** Lucide React
+The project is optimized for deployment using **Render** (Backend) and **Vercel** (Frontend).
+
+### 1. Backend Deployment (Render)
+- The repository contains a `render.yaml` file for Blueprint deployment.
+- Simply go to [Render Dashboard](https://dashboard.render.com), click **"New +"** > **"Blueprint"**, and connect your GitHub repository.
+- It will automatically set up:
+  - **FastAPI Web Service**
+  - **PostgreSQL Database** (for persistent user data)
+- **Required Env Vars**: You will need to manually add `GEMINI_API_KEY` and `HF_TOKEN` in the Render dashboard after the first build.
+
+### 2. Frontend Deployment (Vercel)
+- Go to [Vercel](https://vercel.com), click **"Add New Project"**, and import your repository.
+- Set the **Root Directory** to `frontend`.
+- Add the following **Environment Variable**:
+  - `NEXT_PUBLIC_API_URL`: `https://your-backend-url.onrender.com/api`
+
+### 3. Final Step
+Once both are deployed, update the `ALLOWED_ORIGINS` in Render to match your Vercel URL to enable secure cross-origin requests.
+
+---
+
+## 🛠️ Technology Stack
+- **Frontend**: Next.js 15, Tailwind CSS, Framer Motion, Lucide React
+- **Backend**: FastAPI, SQLAlchemy, PostgreSQL/SQLite
+- **AI/ML**: IDM-VTON (Hugging Face), Google Gemini Pro
+- **Payments**: Razorpay Integration
 - **API Requests:** Axios
 
 ### **Backend**
