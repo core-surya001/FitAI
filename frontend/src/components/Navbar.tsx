@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, ShoppingBag, User, LogOut } from "lucide-react";
+import { User, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuthStore } from "@/lib/store";
 
@@ -78,27 +78,21 @@ export default function Navbar() {
 
         {/* Right Actions */}
         <div className="flex items-center gap-6 text-black">
-          <button className="hover:text-gray-600 transition-colors">
-            <Search className="w-5 h-5" />
-          </button>
-          <button className="hover:text-gray-600 transition-colors">
-            <ShoppingBag className="w-5 h-5" />
-          </button>
-
           {isLoading ? (
             <div className="w-5 h-5 animate-pulse bg-gray-200 rounded-full"></div>
           ) : isAuthenticated && user ? (
             <div className="relative">
               <button 
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="hover:text-gray-600 transition-colors flex items-center"
+                className="hover:text-gray-600 transition-colors flex items-center gap-2 text-sm font-medium"
               >
                 <User className="w-5 h-5" />
+                <span className="hidden sm:inline">{user.full_name}</span>
               </button>
 
               {isMenuOpen && (
-                <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-2 overflow-hidden flex flex-col">
-                  <div className="px-4 py-2 border-b border-gray-50 mb-2">
+                <div className="absolute right-0 mt-3 w-48 bg-white border border-gray-100 rounded-none shadow-lg py-2 overflow-hidden flex flex-col">
+                  <div className="px-4 py-3 border-b border-gray-50 mb-2 bg-[#FAF9F6]">
                     <p className="text-sm font-medium text-black truncate">{user.full_name}</p>
                     <p className="text-xs text-gray-500 truncate">{user.email}</p>
                   </div>
@@ -116,12 +110,20 @@ export default function Navbar() {
               )}
             </div>
           ) : (
-            <Link
-              href="/login"
-              className="hover:text-gray-600 transition-colors flex items-center"
-            >
-              <User className="w-5 h-5" />
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/login"
+                className="text-sm font-medium hover:text-gray-600 transition-colors hidden sm:block"
+              >
+                Log In
+              </Link>
+              <Link
+                href="/login?signup=true"
+                className="text-[10px] font-bold uppercase tracking-widest px-5 py-2.5 bg-black text-white hover:bg-gray-900 transition-all"
+              >
+                Sign Up
+              </Link>
+            </div>
           )}
         </div>
       </div>

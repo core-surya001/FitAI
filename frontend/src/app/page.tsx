@@ -12,12 +12,13 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative w-full min-h-screen flex items-center pt-20 overflow-hidden">
         <div className="absolute right-0 top-0 w-1/2 h-full z-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
-            src="/hero-model.png" 
+            src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200&auto=format&fit=crop" 
             alt="Virtual Try On Model" 
-            className="object-cover w-full h-full object-center opacity-90"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            className="object-cover w-full h-full object-center opacity-90 shadow-2xl"
           />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#FAF9F6] via-transparent to-transparent"></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-6 w-full relative z-10 flex flex-col items-start justify-center">
