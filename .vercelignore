@@ -1,0 +1,9 @@
+backend/
+venv/
+create_presentation.py
+FitAI_Presentation.pptx
+PRD.md
+progress.txt
+virtual_tryon_implementation_plan.md
+deployment_guide.md
+render.yaml
