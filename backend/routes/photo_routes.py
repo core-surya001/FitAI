@@ -18,12 +18,15 @@ def save_upload(file: UploadFile, subfolder: str) -> tuple[str, str]:
     Returns (filename, relative_path).
     """
     folder = os.path.join(UPLOAD_DIR, subfolder)
+    # Ensure directory exists at save-time (not just at startup)
     os.makedirs(folder, exist_ok=True)
 
-    ext      = os.path.splitext(file.filename)[1] or ".jpg"
+    ext      = os.path.splitext(file.filename or "upload")[1] or ".jpg"
     unique   = f"{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(folder, unique)
 
+    # Reset file pointer in case it was partially consumed
+    file.file.seek(0)
     with open(filepath, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
@@ -44,7 +47,11 @@ def upload_user_photo(
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed.")
 
-    filename, filepath = save_upload(file, "user_photos")
+    try:
+        filename, filepath = save_upload(file, "user_photos")
+    except Exception as e:
+        print(f"Photo upload error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save uploaded file: {str(e)}")
 
     photo = models.UserPhoto(
         user_id   = current_user.id,

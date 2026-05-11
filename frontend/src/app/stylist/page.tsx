@@ -58,12 +58,13 @@ export default function StylistPage() {
       };
       
       setMessages(prev => [...prev, aiMessage]);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to fetch stylist response", error);
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Oops! My fashion sensors are a bit tangled right now. Could you please try again?"
+        content: detail || "Oops! My fashion sensors are a bit tangled right now. Could you please try again?"
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {

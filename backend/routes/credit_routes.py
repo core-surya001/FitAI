@@ -93,14 +93,25 @@ def create_order(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     import os
-    import razorpay
     from fastapi import HTTPException
-    
-    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID") or os.getenv("RAZORPAY_KEY") or "dummy_key"
-    razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET") or os.getenv("RAZORPAY_SECRET") or "dummy_secret"
-    
-    # Initialize razorpay client
-    client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
+
+    razorpay_key_id = os.getenv("RAZORPAY_KEY_ID") or os.getenv("RAZORPAY_KEY")
+    razorpay_key_secret = os.getenv("RAZORPAY_KEY_SECRET") or os.getenv("RAZORPAY_SECRET")
+
+    # Guard: fail fast if keys are not configured — avoids confusing Razorpay auth errors
+    if not razorpay_key_id or not razorpay_key_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="Payment gateway is not configured. Please add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET to your environment variables."
+        )
+
+    try:
+        import razorpay
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="Payment module 'razorpay' is not installed on the server. Run: pip install razorpay"
+        )
 
     plan_prices_inr = {"pro": 499, "unlimited": 1499}
 
@@ -109,8 +120,10 @@ def create_order(
 
     amount = plan_prices_inr[plan_name] * 100  # Amount in paise (1 INR = 100 paise)
 
+    # Initialize razorpay client only after key validation
+    client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
+
     try:
-        # Create order
         order_data = {
             "amount": amount,
             "currency": "INR",
@@ -121,7 +134,7 @@ def create_order(
             }
         }
         order = client.order.create(data=order_data)
-        
+
         return {
             "order_id": order["id"],
             "amount": order["amount"],
@@ -130,7 +143,8 @@ def create_order(
             "plan_name": plan_name
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Razorpay order creation failed: {str(e)}")
+        print(f"Razorpay create-order error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create payment order: {str(e)}")
 
 
 from pydantic import BaseModel

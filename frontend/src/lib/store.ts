@@ -36,9 +36,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       const response = await api.get('/auth/me');
       set({ user: response.data, isAuthenticated: true, isLoading: false });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch user:", error);
-      if (typeof window !== 'undefined') localStorage.removeItem('token');
+      // Only remove token if it's explicitly unauthorized. 
+      // Do not remove on network errors or 500s.
+      if (error.response?.status === 401) {
+        if (typeof window !== 'undefined') localStorage.removeItem('token');
+      }
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },

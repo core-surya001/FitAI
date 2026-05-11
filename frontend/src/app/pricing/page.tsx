@@ -1,27 +1,11 @@
 "use client";
 
-import { Check, Zap, AlertCircle, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Check, Zap } from "lucide-react";
+import { motion } from "framer-motion";
 import { useAuthStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import api from "@/lib/api";
-
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
-
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
+import PaymentModal from "@/components/PaymentModal";
 
 const plans = [
   {
@@ -29,6 +13,7 @@ const plans = [
     name: "Starter",
     price: "Free",
     credits: "50 Credits",
+    period: undefined,
     desc: "Perfect for testing out the magic.",
     features: [
       "50 Free credits on signup",
@@ -76,131 +61,75 @@ const plans = [
 ];
 
 export default function PricingPage() {
-  const { user, isAuthenticated, fetchUser } = useAuthStore();
+  const { user, isAuthenticated } = useAuthStore();
   const router = useRouter();
-  
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const handleOpenGateway = async (planId: string) => {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<typeof plans[0] | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const handleSubscribe = (plan: typeof plans[0]) => {
     if (!isAuthenticated) {
       router.push("/login?signup=true");
       return;
     }
-    if (planId === "free") return;
-    
-    setIsProcessing(true);
-    setError(null);
+    if (plan.id === "free") return;
 
-    const res = await loadRazorpayScript();
-    if (!res) {
-      setError("Failed to load Razorpay SDK. Please check your connection.");
-      setIsProcessing(false);
-      return;
-    }
+    setSelectedPlan(plan);
+    setModalOpen(true);
+  };
 
-    try {
-      // Create order
-      const orderResponse = await api.post(`/credits/create-order/${planId}`);
-      const orderData = orderResponse.data;
-
-      const options = {
-        key: orderData.key_id, 
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: "FitAI Subscription",
-        description: `Subscribe to ${planId} plan`,
-        order_id: orderData.order_id,
-        handler: async function (response: any) {
-          try {
-            await api.post("/credits/verify-payment", {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              plan_name: planId
-            });
-            await fetchUser();
-            setPaymentSuccess(true);
-            setTimeout(() => {
-              setPaymentSuccess(false);
-              router.push("/studio");
-            }, 3000);
-          } catch (err) {
-            setError("Payment verification failed.");
-          }
-        },
-        prefill: {
-          name: user?.full_name || "",
-          email: user?.email || "",
-        },
-        theme: {
-          color: "#000000"
-        }
-      };
-
-      const paymentObject = new window.Razorpay(options);
-      paymentObject.on('payment.failed', function (response: any) {
-        setError(response.error.description || "Payment failed");
-      });
-      paymentObject.open();
-
-    } catch (err: unknown) {
-      const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Failed to initiate payment.";
-      setError(errorMessage);
-    } finally {
-      setIsProcessing(false);
-    }
+  const handlePaymentDone = () => {
+    setSuccessMsg(
+      `Your ${selectedPlan?.name} plan will be activated within a few minutes after payment verification. Thank you!`
+    );
+    setTimeout(() => setSuccessMsg(null), 8000);
   };
 
   return (
     <div className="w-full min-h-screen bg-[#FAF9F6] pt-32 pb-24 px-6 flex flex-col items-center relative font-sans">
-      
-      {/* ── Status Messages ── */}
-      <AnimatePresence>
-        {paymentSuccess && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-white border border-black/5 rounded-none p-12 flex flex-col items-center text-center shadow-2xl max-w-sm"
-            >
-              <div className="w-16 h-16 bg-black text-white rounded-full flex items-center justify-center mb-6">
-                <Check className="w-8 h-8" />
-              </div>
-              <h3 className="text-2xl font-serif text-black mb-2">Payment Successful</h3>
-              <p className="text-gray-500 text-sm">Your account has been upgraded. Redirecting to your studio...</p>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-      
-      {error && (
-        <div className="fixed top-24 z-50 p-4 bg-white border border-red-100 flex items-center gap-3 text-red-600 text-xs uppercase tracking-widest font-bold shadow-xl">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <p>{error}</p>
-          <button onClick={() => setError(null)} className="ml-4 text-gray-400 hover:text-black">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+
+      {/* ── Payment Modal ── */}
+      <PaymentModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        plan={selectedPlan}
+        user={user}
+        onPaymentDone={handlePaymentDone}
+      />
+
+      {/* ── Success Banner ── */}
+      {successMsg && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="fixed top-24 z-50 max-w-lg px-6 py-4 bg-white border border-green-200 text-green-700 text-xs shadow-xl flex items-start gap-3"
+        >
+          <Check className="w-4 h-4 mt-0.5 shrink-0" />
+          <p>{successMsg}</p>
+        </motion.div>
       )}
 
+      {/* ── Page Header ── */}
       <div className="text-center mb-20 max-w-2xl">
-        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400 mb-4">Investment & Access</p>
-        <h1 className="text-5xl md:text-6xl font-serif text-black mb-8 leading-tight">Elevate Your<br/>Digital Wardrobe</h1>
+        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-gray-400 mb-4">Investment &amp; Access</p>
+        <h1 className="text-5xl md:text-6xl font-serif text-black mb-8 leading-tight">
+          Elevate Your<br />Digital Wardrobe
+        </h1>
         <p className="text-gray-500 text-lg mb-10 leading-relaxed">
-          Experience boundless creativity. Each generation consumes <strong className="text-black">2 credits</strong>. 
+          Experience boundless creativity. Each generation consumes{" "}
+          <strong className="text-black">2 credits</strong>.{" "}
           Choose a plan that fits your rhythm.
         </p>
-        
+
         {user && (
           <div className="inline-flex items-center gap-4 px-8 py-4 bg-white border border-black/5 shadow-sm">
             <div className="flex flex-col items-start">
               <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Current Plan</span>
               <span className="text-sm text-black font-serif capitalize">{user.subscription}</span>
             </div>
-            <div className="w-px h-8 bg-gray-100"></div>
+            <div className="w-px h-8 bg-gray-100" />
             <div className="flex flex-col items-start">
               <span className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Balance</span>
               <span className="text-sm text-black font-serif">{user.credits} Credits</span>
@@ -209,9 +138,10 @@ export default function PricingPage() {
         )}
       </div>
 
+      {/* ── Plan Cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl">
         {plans.map((plan, i) => (
-          <motion.div 
+          <motion.div
             key={plan.name}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -225,10 +155,10 @@ export default function PricingPage() {
                 Recommended
               </div>
             )}
-            
+
             <h3 className="text-xl font-serif text-black mb-2">{plan.name}</h3>
             <p className="text-xs text-gray-400 mb-8 uppercase tracking-widest font-bold">{plan.credits}</p>
-            
+
             <div className="mb-8">
               <span className="text-4xl font-serif text-black">{plan.price}</span>
               {plan.period && <span className="text-gray-500 text-sm">{plan.period}</span>}
@@ -245,10 +175,11 @@ export default function PricingPage() {
               ))}
             </ul>
 
-            <button 
-              onClick={() => handleOpenGateway(plan.id)}
-              disabled={user?.subscription === plan.id || plan.id === "free" || isProcessing}
-              className={`w-full py-4 font-bold uppercase tracking-widest text-[10px] transition-all flex items-center justify-center ${
+            <button
+              id={`subscribe-${plan.id}`}
+              onClick={() => handleSubscribe(plan)}
+              disabled={user?.subscription === plan.id || plan.id === "free"}
+              className={`w-full py-4 font-bold uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2 ${
                 user?.subscription === plan.id
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : plan.id === "free"
@@ -256,15 +187,25 @@ export default function PricingPage() {
                     : "bg-black text-white hover:bg-gray-900 shadow-xl"
               }`}
             >
-              {isProcessing && plan.id !== "free" ? (
-                 <span className="inline-block w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              {user?.subscription === plan.id ? (
+                "Active Plan"
+              ) : plan.id === "free" ? (
+                "Sign Up Free"
               ) : (
-                user?.subscription === plan.id ? "Active Plan" : plan.buttonText
+                <>
+                  <Zap className="w-3 h-3" />
+                  {plan.buttonText}
+                </>
               )}
             </button>
           </motion.div>
         ))}
       </div>
+
+      {/* ── UPI note ── */}
+      <p className="mt-16 text-[11px] text-gray-400 uppercase tracking-widest font-bold">
+        Payments via UPI · Instant activation after verification
+      </p>
     </div>
   );
 }

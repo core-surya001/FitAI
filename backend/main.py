@@ -38,6 +38,8 @@ allowed_origins = [origin.strip().strip("'").strip('"').rstrip("/") for origin i
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    # This regex allows ALL vercel.app preview/production URLs automatically
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -5,17 +5,6 @@ from typing import List, Dict
 
 router = APIRouter(prefix="/api/stylist", tags=["AI Stylist"])
 
-# Configure Gemini
-# Support both standard naming and the one found in user's Render dashboard
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("Gemini_api")
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    # gemini-1.5-flash is the stable fast model
-    model = genai.GenerativeModel('gemini-1.5-flash')
-else:
-    model = None
-
 SYSTEM_PROMPT = """
 You are FitAI, a professional and high-end fashion stylist assistant. 
 Your goal is to help users find the perfect outfit based on their preferences, body type, occasion, and current trends.
@@ -24,6 +13,15 @@ Recommend specific colors, fabrics, and styles.
 If the user asks about virtual try-on, tell them they can use our Studio to see the clothes on themselves.
 Keep your responses concise but insightful.
 """
+
+def _get_gemini_model():
+    """Lazily initialize Gemini model so env vars are always read at request time."""
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("Gemini_api")
+    if not api_key:
+        return None
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel('gemini-1.5-flash')
+
 
 @router.post("/chat")
 async def ai_stylist_chat(payload: Dict):
@@ -36,9 +34,11 @@ async def ai_stylist_chat(payload: Dict):
     if not user_message:
         raise HTTPException(status_code=400, detail="Message is required.")
 
+    model = _get_gemini_model()
+
     if not model:
         # Fallback if API key is missing
-        return {"reply": "I'm currently resting. Please set my API key to start chatting!"}
+        return {"reply": "I'm currently resting. Please set my GEMINI_API_KEY environment variable to start chatting!"}
 
     try:
         # Generate response using Gemini
@@ -48,4 +48,7 @@ async def ai_stylist_chat(payload: Dict):
         return {"reply": response.text}
     except Exception as e:
         print(f"Gemini Error: {e}")
-        return {"reply": "Sorry, I'm having a bit of a creative block. Can you ask me again?"}
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI Stylist is temporarily unavailable. Please try again shortly. ({type(e).__name__})"
+        )
