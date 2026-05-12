@@ -11,19 +11,19 @@ export default function Home() {
       
       {/* Hero Section */}
       <section className="relative w-full min-h-screen flex items-center pt-20 overflow-hidden">
-        <div className="absolute right-0 top-0 w-1/2 h-full z-0">
+        <div className="absolute inset-0 md:left-auto md:right-0 md:top-0 w-full md:w-1/2 h-full z-0 opacity-20 md:opacity-100 transition-opacity">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
             src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200&auto=format&fit=crop" 
             alt="Virtual Try On Model" 
             className="object-cover w-full h-full object-center opacity-90 shadow-2xl"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#FAF9F6] via-transparent to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-[#FAF9F6] via-[#FAF9F6]/80 md:via-transparent to-transparent"></div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-6 w-full relative z-10 flex flex-col items-start justify-center">
-          <div className="max-w-2xl">
-            <p className="text-xs font-bold tracking-widest text-gray-500 uppercase mb-4">
+        <div className="max-w-7xl mx-auto px-6 w-full relative z-10 flex flex-col items-center md:items-start justify-center">
+          <div className="max-w-2xl text-center md:text-left pt-12 md:pt-0">
+            <p className="text-xs font-bold tracking-widest text-gray-600 md:text-gray-500 uppercase mb-4">
               AI Virtual Couture
             </p>
 
@@ -31,16 +31,16 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
-              className="text-6xl md:text-8xl font-serif tracking-tight text-black leading-[1.1] mb-8"
+              className="text-5xl sm:text-6xl md:text-8xl font-serif tracking-tight text-black leading-[1.1] mb-8"
             >
-              The Future of<br/>Fitting
+              The Future of<br/>Fashion
             </motion.h1>
 
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-              className="text-lg md:text-xl text-gray-600 max-w-lg mb-10 leading-relaxed font-sans"
+              className="text-base sm:text-lg md:text-xl text-gray-800 md:text-gray-600 max-w-lg mb-10 leading-relaxed font-sans mx-auto md:mx-0"
             >
               Experience frictionless fashion. Our advanced AI seamlessly drapes high-end garments onto your digital twin, redefining how you discover and style your wardrobe.
             </motion.p>
@@ -49,7 +49,7 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-              className="flex flex-col sm:flex-row items-center gap-4"
+              className="flex flex-col sm:flex-row items-center justify-center md:justify-start gap-4 w-full"
             >
               <Link
                 href="/studio"
@@ -111,7 +111,7 @@ export default function Home() {
             </p>
           </div>
           
-          <div className="flex gap-16 font-sans">
+          <div className="flex flex-col sm:flex-row gap-8 sm:gap-16 font-sans">
             <div className="flex flex-col gap-4">
               <Link href="#" className="text-[10px] text-black font-bold uppercase tracking-widest hover:opacity-50 transition-opacity">Legal & Privacy</Link>
               <Link href="#" className="text-[10px] text-black font-bold uppercase tracking-widest hover:opacity-50 transition-opacity">Terms of Vision</Link>
@@ -122,7 +122,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="text-right text-gray-400 text-[10px] uppercase tracking-widest font-bold font-sans">
+          <div className="text-left md:text-right text-gray-400 text-[10px] uppercase tracking-widest font-bold font-sans">
             <p>© 2024 FitAI Virtual Couture.</p>
             <p className="mt-2 text-black/20 italic">Established in the Future.</p>
           </div>
