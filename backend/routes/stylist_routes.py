@@ -43,7 +43,7 @@ async def ai_stylist_chat(payload: Dict):
     try:
         # Generate response using Gemini
         chat = model.start_chat(history=[])
-        response = chat.send_message(f"{SYSTEM_PROMPT}\n\nUser: {user_message}")
+        response = await chat.send_message_async(f"{SYSTEM_PROMPT}\n\nUser: {user_message}")
         
         return {"reply": response.text}
     except Exception as e:

@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/tryon", tags=["Virtual Try-On"])
 
 # ── Free Alternative: Hugging Face Space (Gradio) ────────────────────────────
 HF_SPACE = "yisol/IDM-VTON"
+_gradio_client = None
 
 @router.post("/generate", response_model=schemas.TryOnJobOut)
 def generate_tryon(
@@ -36,8 +37,10 @@ def generate_tryon(
     # 3. Call Gradio (Free AI Model - IDM-VTON)
     try:
         hf_token = os.getenv("HF_TOKEN") or os.getenv("HF_token")
-        client = Client(HF_SPACE, token=hf_token)
-        
+        global _gradio_client
+        if _gradio_client is None:
+            _gradio_client = Client(HF_SPACE, token=hf_token)
+        client = _gradio_client
         # IDM-VTON requires an Imageeditor dict for the model image
         result = client.predict(
             dict={"background": handle_file(model_photo.file_path), "layers": [], "composite": None},
