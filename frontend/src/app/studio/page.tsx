@@ -62,13 +62,22 @@ export default function StudioPage() {
         api.get("/tryon/history")
       ]);
       
-      // Build a clean base URL: strip trailing /api or /api/ from the env variable
+      // Build a clean base URL for local file paths (strips trailing /api)
       const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
       const baseURL = apiURL.replace(/\/api\/?$/, '');
       
-      const toURL = (filePath: string) => {
-        // Normalize Windows backslashes and strip any leading slashes/dots
-        const cleanPath = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+      /**
+       * toURL: converts a stored file_path into a displayable image URL.
+       * - If file_path is already a full URL (Cloudinary / http), use it as-is.
+       * - If it's a relative local path, prepend the backend base URL.
+       */
+      const toURL = (filePath: string): string => {
+        if (!filePath) return '';
+        if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+          return filePath; // Already a full Cloudinary or absolute URL
+        }
+        // Local relative path: normalize slashes and join with base
+        const cleanPath = filePath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
         return `${baseURL}/${cleanPath}`;
       };
 
@@ -85,17 +94,10 @@ export default function StudioPage() {
         type: "custom"
       })));
 
-      const fixedHistory = historyRes.data.map((job: TryonHistory) => {
-        // Replace any localhost URL with the real backend URL
-        if (job.result_url && job.result_url.includes('localhost:8000')) {
-          return { ...job, result_url: job.result_url.replace('http://localhost:8000', baseURL) };
-        }
-        // Handle relative paths stored by backend (no http prefix)
-        if (job.result_url && !job.result_url.startsWith('http')) {
-          return { ...job, result_url: `${baseURL}/${job.result_url.replace(/^\//, '')}` };
-        }
-        return job;
-      });
+      const fixedHistory = historyRes.data.map((job: TryonHistory) => ({
+        ...job,
+        result_url: toURL(job.result_url)
+      }));
       setTryonHistory(fixedHistory);
     } catch (err) {
       console.error("Failed to fetch assets", err);

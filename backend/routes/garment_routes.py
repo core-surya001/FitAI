@@ -5,6 +5,7 @@ import os, uuid, shutil
 
 from database import get_db
 import models, schemas, auth
+from cloudinary_helper import is_cloudinary_configured, upload_to_cloudinary
 
 router = APIRouter(prefix="/api/garments", tags=["Garments"])
 
@@ -12,17 +13,32 @@ UPLOAD_DIR   = os.getenv("UPLOAD_DIR", "uploads")
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
-def save_upload(file: UploadFile, subfolder: str) -> tuple[str, str]:
+def save_upload_local(file: UploadFile, subfolder: str) -> tuple[str, str]:
     folder   = os.path.join(UPLOAD_DIR, subfolder)
     os.makedirs(folder, exist_ok=True)
     ext      = os.path.splitext(file.filename or "upload")[1] or ".jpg"
     unique   = f"{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(folder, unique)
-    # Reset file pointer in case it was partially consumed
     file.file.seek(0)
     with open(filepath, "wb") as f:
         shutil.copyfileobj(file.file, f)
     return unique, filepath.replace("\\", "/")
+
+
+def upload_file(file: UploadFile, subfolder: str) -> tuple[str, str]:
+    """
+    Upload to Cloudinary if configured, otherwise save locally.
+    Returns (display_name, file_path_or_url).
+    """
+    if is_cloudinary_configured():
+        file.file.seek(0)
+        raw = file.file.read()
+        cloud_folder = f"fitai/{subfolder}"
+        url = upload_to_cloudinary(raw, cloud_folder)
+        display_name = file.filename or "upload"
+        return display_name, url
+    else:
+        return save_upload_local(file, subfolder)
 
 
 @router.post("/upload", response_model=schemas.GarmentOut, status_code=status.HTTP_201_CREATED)
@@ -35,20 +51,20 @@ def upload_garment(
 ):
     """
     Upload a garment/clothing photo.
-    - Optionally provide a name (e.g., 'Blue Floral Dress') and category ('tops'/'bottoms'/'dresses').
+    - Saves to Cloudinary (if configured) or local disk.
     """
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed.")
 
     try:
-        filename, filepath = save_upload(file, "garments")
+        filename, filepath = upload_file(file, "garments")
     except Exception as e:
         print(f"Garment upload error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save uploaded file: {str(e)}")
 
     garment = models.Garment(
         user_id   = current_user.id,
-        name      = name,
+        name      = name or filename,
         category  = category,
         filename  = filename,
         file_path = filepath
@@ -65,10 +81,7 @@ def get_garments(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    """
-    Returns all garments uploaded by the user.
-    Optionally filter by category: ?category=tops
-    """
+    """Returns all garments uploaded by the user. Optionally filter by category."""
     query = db.query(models.Garment).filter(models.Garment.user_id == current_user.id)
     if category:
         query = query.filter(models.Garment.category == category)
@@ -89,8 +102,10 @@ def delete_garment(
     if not garment:
         raise HTTPException(status_code=404, detail="Garment not found.")
 
-    if os.path.exists(garment.file_path):
-        os.remove(garment.file_path)
+    # Only delete local files, not Cloudinary URLs
+    if garment.file_path and not garment.file_path.startswith("http"):
+        if os.path.exists(garment.file_path):
+            os.remove(garment.file_path)
 
     db.delete(garment)
     db.commit()

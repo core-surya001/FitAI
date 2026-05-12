@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 from typing import List
-import aiofiles, uuid, os, shutil
+import uuid, os, shutil
 
 from database import get_db
 import models, schemas, auth
+from cloudinary_helper import is_cloudinary_configured, upload_to_cloudinary
 
 router = APIRouter(prefix="/api/photos", tags=["User Photos"])
 
@@ -12,25 +13,36 @@ UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
-def save_upload(file: UploadFile, subfolder: str) -> tuple[str, str]:
-    """
-    Saves an uploaded file to disk.
-    Returns (filename, relative_path).
-    """
+def save_upload_local(file: UploadFile, subfolder: str) -> tuple[str, str]:
+    """Saves an uploaded file to local disk. Returns (filename, relative_path)."""
     folder = os.path.join(UPLOAD_DIR, subfolder)
-    # Ensure directory exists at save-time (not just at startup)
     os.makedirs(folder, exist_ok=True)
-
     ext      = os.path.splitext(file.filename or "upload")[1] or ".jpg"
     unique   = f"{uuid.uuid4().hex}{ext}"
     filepath = os.path.join(folder, unique)
-
-    # Reset file pointer in case it was partially consumed
     file.file.seek(0)
     with open(filepath, "wb") as f:
         shutil.copyfileobj(file.file, f)
-
     return unique, filepath.replace("\\", "/")
+
+
+def upload_file(file: UploadFile, subfolder: str) -> tuple[str, str]:
+    """
+    Upload to Cloudinary if configured, otherwise save locally.
+    Returns (display_name, file_path_or_url).
+    file_path stored in DB:
+      - Cloudinary: full HTTPS URL  (e.g. https://res.cloudinary.com/...)
+      - Local: relative path        (e.g. uploads/user_photos/abc.jpg)
+    """
+    if is_cloudinary_configured():
+        file.file.seek(0)
+        raw = file.file.read()
+        cloud_folder = f"fitai/{subfolder}"
+        url = upload_to_cloudinary(raw, cloud_folder)
+        display_name = file.filename or "upload"
+        return display_name, url
+    else:
+        return save_upload_local(file, subfolder)
 
 
 @router.post("/upload", response_model=schemas.UserPhotoOut, status_code=status.HTTP_201_CREATED)
@@ -42,13 +54,13 @@ def upload_user_photo(
     """
     Upload a full-body photo of the user (the 'model' for try-on).
     - Accepts JPEG, PNG, WebP files only.
-    - Saves to the local uploads/user_photos/ directory.
+    - Saves to Cloudinary (if configured) or local disk.
     """
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed.")
 
     try:
-        filename, filepath = save_upload(file, "user_photos")
+        filename, filepath = upload_file(file, "user_photos")
     except Exception as e:
         print(f"Photo upload error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save uploaded file: {str(e)}")
@@ -88,9 +100,10 @@ def delete_user_photo(
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found.")
 
-    # Remove the file from disk
-    if os.path.exists(photo.file_path):
-        os.remove(photo.file_path)
+    # Remove the file — only delete local files, not Cloudinary URLs
+    if photo.file_path and not photo.file_path.startswith("http"):
+        if os.path.exists(photo.file_path):
+            os.remove(photo.file_path)
 
     db.delete(photo)
     db.commit()
