@@ -67,9 +67,14 @@ def generate_tryon(
         # Move file from temp to permanent storage
         shutil.move(temp_result_path, final_result_path)
         
-        # Construct URL
-        base_url = os.getenv("BASE_URL", "http://localhost:8000")
-        result_url = f"{base_url}/uploads/results/{result_filename}"
+        # Construct URL — use BASE_URL env var (set this on Render to your service URL)
+        # Storing relative URL as fallback so frontend can always fix it
+        base_url = os.getenv("BASE_URL", "").rstrip("/")
+        if base_url:
+            result_url = f"{base_url}/uploads/results/{result_filename}"
+        else:
+            # Store as a relative path — frontend will prepend the correct backend origin
+            result_url = f"uploads/results/{result_filename}"
 
         # 5. Save Record to Database
         new_result = models.TryOnJob(
@@ -131,11 +136,22 @@ def delete_tryon_job(
         raise HTTPException(status_code=404, detail="Job not found.")
 
     # Remove the file from disk if it's stored locally
-    base_url = os.getenv("BASE_URL", "http://localhost:8000")
-    if job.result_url.startswith(base_url):
-        file_path = job.result_url.replace(f"{base_url}/", "")
-        if os.path.exists(file_path):
-            os.remove(file_path)
+    base_url = os.getenv("BASE_URL", "").rstrip("/")
+    file_path = None
+    if job.result_url:
+        if base_url and job.result_url.startswith(base_url):
+            file_path = job.result_url.replace(f"{base_url}/", "", 1)
+        elif job.result_url.startswith("http"):
+            # Absolute URL from old localhost storage — extract relative path
+            from urllib.parse import urlparse
+            parsed = urlparse(job.result_url)
+            file_path = parsed.path.lstrip("/")
+        else:
+            # Relative path stored directly
+            file_path = job.result_url.lstrip("/")
+    
+    if file_path and os.path.exists(file_path):
+        os.remove(file_path)
 
     db.delete(job)
     db.commit()

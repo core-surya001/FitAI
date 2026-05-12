@@ -62,14 +62,37 @@ export default function StudioPage() {
         api.get("/tryon/history")
       ]);
       
-      const baseURL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
+      // Build a clean base URL: strip trailing /api or /api/ from the env variable
+      const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+      const baseURL = apiURL.replace(/\/api\/?$/, '');
       
-      setUserModels(photosRes.data.map((p: {id: string, file_path: string}) => ({ ...p, name: "Model", url: `${baseURL}/${p.file_path}`, type: "custom" })));
-      setUserGarments(garmentsRes.data.map((g: {id: string, file_path: string}) => ({ ...g, name: "Garment", url: `${baseURL}/${g.file_path}`, type: "custom" })));
-      
+      const toURL = (filePath: string) => {
+        // Normalize Windows backslashes and strip any leading slashes/dots
+        const cleanPath = filePath.replace(/\\/g, '/').replace(/^\.\//, '');
+        return `${baseURL}/${cleanPath}`;
+      };
+
+      setUserModels(photosRes.data.map((p: {id: string, file_path: string, filename: string}) => ({
+        ...p,
+        name: p.filename || "Model",
+        url: toURL(p.file_path),
+        type: "custom"
+      })));
+      setUserGarments(garmentsRes.data.map((g: {id: string, file_path: string, filename: string, name?: string}) => ({
+        ...g,
+        name: g.name || g.filename || "Garment",
+        url: toURL(g.file_path),
+        type: "custom"
+      })));
+
       const fixedHistory = historyRes.data.map((job: TryonHistory) => {
+        // Replace any localhost URL with the real backend URL
         if (job.result_url && job.result_url.includes('localhost:8000')) {
           return { ...job, result_url: job.result_url.replace('http://localhost:8000', baseURL) };
+        }
+        // Handle relative paths stored by backend (no http prefix)
+        if (job.result_url && !job.result_url.startsWith('http')) {
+          return { ...job, result_url: `${baseURL}/${job.result_url.replace(/^\//, '')}` };
         }
         return job;
       });
@@ -201,10 +224,10 @@ export default function StudioPage() {
   const allGarments = [...userGarments, ...DEFAULT_GARMENTS];
 
   return (
-    <div className="w-full h-[calc(100vh-80px)] flex flex-col md:flex-row overflow-hidden bg-[#FAF9F6]">
+    <div className="w-full flex flex-col md:flex-row md:h-[calc(100vh-80px)] min-h-screen bg-[#FAF9F6]">
       
       {/* LEFT PANEL: User Models */}
-      <div className="w-full md:w-80 border-r border-black/5 bg-white flex flex-col h-full shrink-0">
+      <div className="w-full md:w-80 border-r border-black/5 bg-white flex flex-col md:h-full max-h-72 md:max-h-none shrink-0">
         <div className="p-6 border-b border-black/5 flex items-center justify-between">
           <h2 className="text-sm font-bold text-black uppercase tracking-widest flex items-center gap-2">
             <ImageIcon className="w-4 h-4 text-gray-400" />
@@ -247,7 +270,7 @@ export default function StudioPage() {
       </div>
 
       {/* MIDDLE PANEL: Garments */}
-      <div className="w-full md:w-80 border-r border-black/5 bg-white flex flex-col h-full shrink-0">
+      <div className="w-full md:w-80 border-r border-black/5 bg-white flex flex-col md:h-full max-h-72 md:max-h-none shrink-0">
         <div className="p-6 border-b border-black/5 flex items-center justify-between">
           <h2 className="text-sm font-bold text-black uppercase tracking-widest flex items-center gap-2">
             <Shirt className="w-4 h-4 text-gray-400" />

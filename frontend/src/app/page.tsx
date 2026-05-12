@@ -10,13 +10,13 @@ export default function Home() {
     <div className="w-full flex flex-col items-center justify-center overflow-x-hidden bg-[#FAF9F6] text-black">
       
       {/* Hero Section */}
-      <section className="relative w-full min-h-screen flex items-center pt-20 overflow-hidden">
+      <section className="relative w-full min-h-screen flex items-center overflow-hidden">
         <div className="absolute inset-0 md:left-auto md:right-0 md:top-0 w-full md:w-1/2 h-full z-0 opacity-20 md:opacity-100 transition-opacity">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
             src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1200&auto=format&fit=crop" 
             alt="Virtual Try On Model" 
-            className="object-cover w-full h-full object-center opacity-90 shadow-2xl"
+            className="object-cover w-full h-full object-top opacity-90 shadow-2xl"
           />
           <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-[#FAF9F6] via-[#FAF9F6]/80 md:via-transparent to-transparent"></div>
         </div>
