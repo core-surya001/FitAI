@@ -117,9 +117,13 @@ export default function StudioPage() {
     try {
       await api.post("/photos/upload", formData, { headers: { "Content-Type": "multipart/form-data" } });
       await fetchUserAssets();
-    } catch (err) {
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; code?: string; message?: string };
+      const msg = !axiosErr.response && (axiosErr.code === "ERR_NETWORK" || axiosErr.message?.includes("Network"))
+        ? "⚠️ Backend is waking up. Please wait 30 seconds and try again."
+        : axiosErr.response?.data?.detail || "Failed to upload model.";
+      setError(msg);
       console.error(err);
-      setError("Failed to upload model.");
     } finally {
       setIsUploadingModel(false);
     }
@@ -135,9 +139,13 @@ export default function StudioPage() {
     try {
       await api.post("/garments/upload", formData, { headers: { "Content-Type": "multipart/form-data" } });
       await fetchUserAssets();
-    } catch (err) {
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { detail?: string } }; code?: string; message?: string };
+      const msg = !axiosErr.response && (axiosErr.code === "ERR_NETWORK" || axiosErr.message?.includes("Network"))
+        ? "⚠️ Backend is waking up. Please wait 30 seconds and try again."
+        : axiosErr.response?.data?.detail || "Failed to upload garment.";
+      setError(msg);
       console.error(err);
-      setError("Failed to upload garment.");
     } finally {
       setIsUploadingGarment(false);
     }
@@ -214,7 +222,15 @@ export default function StudioPage() {
         }
       } catch (err: unknown) {
         setIsGenerating(false);
-        const errorMessage = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || "Failed to generate try-on. Please try again.";
+        // Re-add the 2 credits that were optimistically deducted
+        deductCredits(-2);
+        const axiosErr = err as { response?: { data?: { detail?: string }; status?: number }; code?: string; message?: string };
+        let errorMessage = "Failed to generate try-on. Please try again.";
+        if (!axiosErr.response && (axiosErr.code === "ERR_NETWORK" || axiosErr.message?.includes("Network"))) {
+          errorMessage = "⚠️ Backend is waking up from sleep. Please wait 30 seconds and try again.";
+        } else {
+          errorMessage = axiosErr.response?.data?.detail || errorMessage;
+        }
         setError(errorMessage);
       }
     };

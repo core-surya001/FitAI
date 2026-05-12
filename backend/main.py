@@ -30,19 +30,29 @@ app = FastAPI(
     redoc_url="/redoc"      # ReDoc UI at /redoc
 )
 
-# ── CORS Middleware (allows React frontend to call this API) ─────────────────
-origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
-# Robust parsing: strip whitespace, quotes, and trailing slashes
-allowed_origins = [origin.strip().strip("'").strip('"').rstrip("/") for origin in origins_env.split(",") if origin.strip()]
+# ── CORS Middleware ───────────────────────────────────────────────────────────
+# Allow ALL origins so Vercel preview deploys and local dev always work.
+# Note: allow_credentials=True requires explicit origins, not "*"
+# So we list known origins + use a regex for all *.vercel.app URLs.
+origins_env = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173"
+)
+allowed_origins = [
+    origin.strip().strip("'").strip('"').rstrip("/")
+    for origin in origins_env.split(",")
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    # This regex allows ALL vercel.app preview/production URLs automatically
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    # Matches ALL vercel.app preview/production URLs automatically
+    allow_origin_regex=r"https?://.*",   # Allow all origins (dev + prod)
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ── Serve uploaded images as static files ────────────────────────────────────
