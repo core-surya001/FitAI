@@ -203,8 +203,6 @@ export default function StudioPage() {
     
     setError(null);
     setIsGenerating(true);
-    
-    deductCredits(2);
 
     const generateLook = async () => {
       try {
@@ -215,6 +213,7 @@ export default function StudioPage() {
         
         setIsGenerating(false);
         if (response.data && response.data.result_url) {
+          deductCredits(2); // Only deduct on confirmed success
           setResultImage(response.data.result_url);
           fetchUserAssets();
         } else {
@@ -222,12 +221,13 @@ export default function StudioPage() {
         }
       } catch (err: unknown) {
         setIsGenerating(false);
-        // Re-add the 2 credits that were optimistically deducted
-        deductCredits(-2);
+        // Credits are NOT deducted on failure
         const axiosErr = err as { response?: { data?: { detail?: string }; status?: number }; code?: string; message?: string };
         let errorMessage = "Failed to generate try-on. Please try again.";
         if (!axiosErr.response && (axiosErr.code === "ERR_NETWORK" || axiosErr.message?.includes("Network"))) {
           errorMessage = "⚠️ Backend is waking up from sleep. Please wait 30 seconds and try again.";
+        } else if (axiosErr.code === "ECONNABORTED" || axiosErr.message?.includes("timeout")) {
+          errorMessage = "⏳ The AI generation is taking longer than expected. Please try again — it may work on retry.";
         } else {
           errorMessage = axiosErr.response?.data?.detail || errorMessage;
         }

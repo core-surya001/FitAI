@@ -1,8 +1,8 @@
 import os
-import shutil
 import uuid
 import tempfile
 import httpx
+import replicate
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
@@ -10,29 +10,15 @@ import models, schemas, auth
 
 router = APIRouter(prefix="/api/tryon", tags=["Virtual Try-On"])
 
-# ── Fallback HF Spaces (tried in order) ─────────────────────────────────────
-HF_SPACES = [
-    "yisol/IDM-VTON",
-    "Kwai-Kolors/Kolors-Virtual-Try-On",
-]
-
-# Reset client on each request — no caching of broken connections
-def _make_gradio_client(space: str):
-    from gradio_client import Client
-    hf_token = os.getenv("HF_TOKEN") or os.getenv("HF_token")
-    return Client(space, token=hf_token)
-
 
 def _get_local_path(file_path_or_url: str) -> str:
     """
     Given a file_path from the DB (either a local path or a Cloudinary/remote URL),
-    return a local filesystem path that Gradio's handle_file can use.
-    
+    return a local filesystem path usable for reading.
+    - If it's a remote URL → download to a temp file and return that path.
     - If it's a local path → return as-is.
-    - If it's a remote URL (Cloudinary, etc.) → download to a temp file and return that path.
     """
     if file_path_or_url.startswith("http://") or file_path_or_url.startswith("https://"):
-        # Download the remote image to a temporary file
         suffix = os.path.splitext(file_path_or_url.split("?")[0])[1] or ".jpg"
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         with httpx.Client(timeout=30) as client:
@@ -41,65 +27,49 @@ def _get_local_path(file_path_or_url: str) -> str:
             tmp.write(response.content)
         tmp.close()
         return tmp.name
+    return file_path_or_url
+
+
+def _try_generate_replicate(model_path: str, garment_path: str) -> str:
+    """
+    Run virtual try-on via Replicate API (cuuupid/idm-vton).
+    Returns the URL of the generated result image.
+    Requires REPLICATE_API_TOKEN env var to be set.
+    """
+    api_token = os.getenv("REPLICATE_API_TOKEN")
+    if not api_token:
+        raise Exception("REPLICATE_API_TOKEN is not configured on the server.")
+
+    # Open both image files as binary
+    with open(model_path, "rb") as human_img, open(garment_path, "rb") as garm_img:
+        output = replicate.run(
+            # IDM-VTON hosted on Replicate — fully managed, no cold start
+            "cuuupid/idm-vton:906425dbca90663ff5427624839572cc56ea7d380343d13e2a4c4b09d3f0c30f",
+            input={
+                "human_img": human_img,
+                "garm_img": garm_img,
+                "garment_des": "A stylish garment",
+                "is_checked": True,
+                "is_checked_crop": False,
+                "denoise_steps": 30,
+                "seed": 42,
+            },
+        )
+
+    # Replicate returns a list of URLs or a single URL
+    if isinstance(output, list):
+        if len(output) == 0:
+            raise Exception("Replicate returned an empty result.")
+        result_url = str(output[0])
+    elif hasattr(output, "url"):
+        result_url = output.url
     else:
-        # Local relative path
-        return file_path_or_url
+        result_url = str(output)
 
+    if not result_url or not result_url.startswith("http"):
+        raise Exception(f"Replicate returned an invalid URL: {result_url!r}")
 
-def _run_idm_vton(client, model_path: str, garment_path: str) -> str:
-    """Run IDM-VTON space. Returns local path of the result image."""
-    from gradio_client import handle_file
-    result = client.predict(
-        dict={"background": handle_file(model_path), "layers": [], "composite": None},
-        garm_img=handle_file(garment_path),
-        garment_des="A stylish garment",
-        is_checked=True,
-        is_checked_crop=False,
-        denoise_steps=30,
-        seed=-1,
-        api_name="/tryon"
-    )
-    if not result or len(result) == 0:
-        raise Exception("AI model returned no result.")
-    return result[0]
-
-
-def _run_kolors_vton(client, model_path: str, garment_path: str) -> str:
-    """Run Kolors Virtual Try-On space. Returns local path of the result image."""
-    from gradio_client import handle_file
-    result = client.predict(
-        model_image=handle_file(model_path),
-        garment_image=handle_file(garment_path),
-        api_name="/tryon"
-    )
-    if not result:
-        raise Exception("AI model returned no result.")
-    # May return a string path or a dict with 'url'
-    if isinstance(result, str):
-        return result
-    if isinstance(result, dict):
-        return result.get("url") or result.get("path") or str(result)
-    return str(result)
-
-
-def _try_generate(model_path: str, garment_path: str) -> str:
-    """Try each HF space in order. Returns the local path of the generated image."""
-    last_error = None
-    for space in HF_SPACES:
-        try:
-            print(f"[TryOn] Trying space: {space}")
-            client = _make_gradio_client(space)
-            if "IDM-VTON" in space or "idm-vton" in space:
-                return _run_idm_vton(client, model_path, garment_path)
-            elif "Kolors" in space:
-                return _run_kolors_vton(client, model_path, garment_path)
-            else:
-                return _run_idm_vton(client, model_path, garment_path)
-        except Exception as e:
-            print(f"[TryOn] Space {space} failed: {e}")
-            last_error = e
-            continue
-    raise Exception(f"All AI spaces failed. Last error: {last_error}")
+    return result_url
 
 
 @router.post("/generate", response_model=schemas.TryOnJobOut)
@@ -109,9 +79,9 @@ def generate_tryon(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     """
-    Virtual Try-On using Hugging Face Spaces (Gradio).
-    - Tries multiple spaces with automatic fallback.
+    Virtual Try-On using Replicate (cuuupid/idm-vton).
     - Handles both local file paths and Cloudinary URLs.
+    - Deducts 2 credits only on success.
     """
     # 1. Credit Check
     if current_user.credits < 2:
@@ -124,7 +94,7 @@ def generate_tryon(
     if not model_photo or not garment_photo:
         raise HTTPException(status_code=404, detail="Model or Garment photo not found.")
 
-    # 3. Resolve local file paths (downloads from Cloudinary if needed)
+    # 3. Resolve local file paths (download from Cloudinary if needed)
     model_local = None
     garment_local = None
     model_is_temp = False
@@ -140,38 +110,12 @@ def generate_tryon(
         garment_local = _get_local_path(original_garment_path)
         garment_is_temp = original_garment_path.startswith("http")
 
-        # 4. Run AI generation (tries multiple HF spaces)
-        temp_result_path = _try_generate(model_local, garment_local)
+        # 4. Run AI generation via Replicate
+        print(f"[TryOn] Starting Replicate generation for user {current_user.id}")
+        result_url = _try_generate_replicate(model_local, garment_local)
+        print(f"[TryOn] Replicate returned result URL: {result_url}")
 
-        # 5. Save Result
-        result_filename = f"{uuid.uuid4().hex}.png"
-        final_result_path = os.path.join("uploads", "results", result_filename)
-        os.makedirs(os.path.dirname(final_result_path), exist_ok=True)
-        shutil.move(temp_result_path, final_result_path)
-
-        # 6. Upload result to Cloudinary if configured
-        try:
-            from cloudinary_helper import is_cloudinary_configured, upload_to_cloudinary
-            if is_cloudinary_configured():
-                with open(final_result_path, "rb") as f:
-                    result_url = upload_to_cloudinary(f.read(), "fitai/results")
-                os.remove(final_result_path)  # Remove local copy after cloud upload
-            else:
-                base_url = os.getenv("BASE_URL", "").rstrip("/")
-                result_url = (
-                    f"{base_url}/uploads/results/{result_filename}"
-                    if base_url
-                    else f"uploads/results/{result_filename}"
-                )
-        except Exception:
-            base_url = os.getenv("BASE_URL", "").rstrip("/")
-            result_url = (
-                f"{base_url}/uploads/results/{result_filename}"
-                if base_url
-                else f"uploads/results/{result_filename}"
-            )
-
-        # 7. Save record + deduct credits
+        # 5. Save record + deduct credits (only on success)
         new_result = models.TryOnJob(
             user_id       = current_user.id,
             user_photo_id = model_photo.id,
@@ -188,18 +132,27 @@ def generate_tryon(
         ))
         db.commit()
         db.refresh(new_result)
+        print(f"[TryOn] Job {new_result.id} saved successfully.")
         return new_result
 
-    except Exception as e:
-        print(f"[TryOn] Generation error: {e}")
+    except HTTPException:
         db.rollback()
+        raise
+
+    except Exception as e:
+        db.rollback()
+        print(f"[TryOn] Generation error: {e}")
         error_msg = str(e)
-        if "CONFIG_ERROR" in error_msg:
-            user_msg = "The AI try-on service is temporarily unavailable (HF Space is down). Please try again in a few minutes."
-        elif "All AI spaces failed" in error_msg:
-            user_msg = "All AI try-on services are currently unavailable. Please try again later."
+
+        if "REPLICATE_API_TOKEN" in error_msg:
+            user_msg = "The AI service is not configured. Please contact support."
+        elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
+            user_msg = "Invalid API token for the AI service. Please contact support."
+        elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+            user_msg = "The AI generation timed out. Please try again."
         else:
             user_msg = f"Try-on generation failed: {error_msg}"
+
         raise HTTPException(status_code=503, detail=user_msg)
 
     finally:
@@ -239,7 +192,7 @@ def delete_tryon_job(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")
 
-    # Remove local file (skip for Cloudinary/remote URLs)
+    # Remove local file only (skip for remote URLs)
     if job.result_url and not job.result_url.startswith("http"):
         file_path = job.result_url.lstrip("/")
         if os.path.exists(file_path):

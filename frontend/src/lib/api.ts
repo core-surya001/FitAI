@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api', // FastAPI Backend URL
+  timeout: 180000, // 3 min — allows for Render cold start (~75s) + AI generation time
 });
 
 console.log("🛠️ Frontend API Base URL is currently set to:", process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api');
