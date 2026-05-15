@@ -1,8 +1,8 @@
 import os
 import uuid
+import base64
 import tempfile
 import httpx
-import replicate
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
@@ -13,10 +13,8 @@ router = APIRouter(prefix="/api/tryon", tags=["Virtual Try-On"])
 
 def _get_local_path(file_path_or_url: str) -> str:
     """
-    Given a file_path from the DB (either a local path or a Cloudinary/remote URL),
+    Given a file_path from the DB (local path or remote URL),
     return a local filesystem path usable for reading.
-    - If it's a remote URL → download to a temp file and return that path.
-    - If it's a local path → return as-is.
     """
     if file_path_or_url.startswith("http://") or file_path_or_url.startswith("https://"):
         suffix = os.path.splitext(file_path_or_url.split("?")[0])[1] or ".jpg"
@@ -30,46 +28,72 @@ def _get_local_path(file_path_or_url: str) -> str:
     return file_path_or_url
 
 
-def _try_generate_replicate(model_path: str, garment_path: str) -> str:
+def _image_to_base64(path: str) -> tuple[str, str]:
+    """Read an image file and return (base64_string, mime_type)."""
+    ext = os.path.splitext(path)[1].lower()
+    mime_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }
+    mime = mime_map.get(ext, "image/jpeg")
+    with open(path, "rb") as f:
+        data = base64.b64encode(f.read()).decode("utf-8")
+    return data, mime
+
+
+def _try_generate_gemini(model_path: str, garment_path: str) -> bytes:
     """
-    Run virtual try-on via Replicate API (cuuupid/idm-vton).
-    Returns the URL of the generated result image.
-    Requires REPLICATE_API_TOKEN env var to be set.
+    Use Google Gemini to generate a virtual try-on result.
+    Sends both images and asks Gemini to produce a realistic composite.
+    Returns the raw PNG bytes of the generated image.
     """
-    api_token = os.getenv("REPLICATE_API_TOKEN")
-    if not api_token:
-        raise Exception("REPLICATE_API_TOKEN is not configured on the server.")
+    import google.generativeai as genai
 
-    # Open both image files as binary
-    with open(model_path, "rb") as human_img, open(garment_path, "rb") as garm_img:
-        output = replicate.run(
-            # IDM-VTON hosted on Replicate — fully managed, no cold start
-            "cuuupid/idm-vton:906425dbca90663ff5427624839572cc56ea7d380343d13e2a4c4b09d3f0c30f",
-            input={
-                "human_img": human_img,
-                "garm_img": garm_img,
-                "garment_des": "A stylish garment",
-                "is_checked": True,
-                "is_checked_crop": False,
-                "denoise_steps": 30,
-                "seed": 42,
-            },
-        )
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("Gemini_api")
+    if not api_key:
+        raise Exception("GEMINI_API_KEY is not configured on the server.")
 
-    # Replicate returns a list of URLs or a single URL
-    if isinstance(output, list):
-        if len(output) == 0:
-            raise Exception("Replicate returned an empty result.")
-        result_url = str(output[0])
-    elif hasattr(output, "url"):
-        result_url = output.url
-    else:
-        result_url = str(output)
+    genai.configure(api_key=api_key)
 
-    if not result_url or not result_url.startswith("http"):
-        raise Exception(f"Replicate returned an invalid URL: {result_url!r}")
+    # Use Gemini 2.0 Flash which supports image output
+    model = genai.GenerativeModel("gemini-2.0-flash-preview-image-generation")
 
-    return result_url
+    model_b64, model_mime = _image_to_base64(model_path)
+    garment_b64, garment_mime = _image_to_base64(garment_path)
+
+    prompt = (
+        "You are a virtual try-on AI. I will give you two images:\n"
+        "1. A person (the model photo)\n"
+        "2. A clothing item / garment\n\n"
+        "Your task: Generate a realistic, high-quality image of the SAME PERSON "
+        "wearing the EXACT garment from image 2. "
+        "Keep the person's face, body, pose, and background the same. "
+        "Only change the clothing to the provided garment. "
+        "Make it look photorealistic and natural. "
+        "Output ONLY the final image with the person wearing the garment."
+    )
+
+    response = model.generate_content(
+        [
+            prompt,
+            {"mime_type": model_mime, "data": model_b64},
+            {"mime_type": garment_mime, "data": garment_b64},
+        ],
+        generation_config={"response_modalities": ["IMAGE", "TEXT"]},
+    )
+
+    # Extract the image bytes from the response
+    for part in response.candidates[0].content.parts:
+        if hasattr(part, "inline_data") and part.inline_data and part.inline_data.data:
+            return part.inline_data.data  # raw bytes
+
+    raise Exception(
+        "Gemini did not return an image. "
+        "The model may have refused or only returned text. "
+        f"Text response: {response.text[:300] if hasattr(response, 'text') else 'none'}"
+    )
 
 
 @router.post("/generate", response_model=schemas.TryOnJobOut)
@@ -79,22 +103,28 @@ def generate_tryon(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     """
-    Virtual Try-On using Replicate (cuuupid/idm-vton).
-    - Handles both local file paths and Cloudinary URLs.
-    - Deducts 2 credits only on success.
+    Virtual Try-On using Google Gemini 2.0 Flash (image generation).
+    - Completely free using the existing GEMINI_API_KEY.
+    - Credits are only deducted on success.
     """
     # 1. Credit Check
     if current_user.credits < 2:
-        raise HTTPException(status_code=403, detail="Not enough credits. Please upgrade your plan.")
+        raise HTTPException(
+            status_code=403,
+            detail="Not enough credits. Please upgrade your plan."
+        )
 
     # 2. Get Model and Garment records from DB
-    model_photo = db.query(models.UserPhoto).filter(models.UserPhoto.id == payload.user_photo_id).first()
-    garment_photo = db.query(models.Garment).filter(models.Garment.id == payload.garment_id).first()
+    model_photo = db.query(models.UserPhoto).filter(
+        models.UserPhoto.id == payload.user_photo_id
+    ).first()
+    garment_photo = db.query(models.Garment).filter(
+        models.Garment.id == payload.garment_id
+    ).first()
 
     if not model_photo or not garment_photo:
         raise HTTPException(status_code=404, detail="Model or Garment photo not found.")
 
-    # 3. Resolve local file paths (download from Cloudinary if needed)
     model_local = None
     garment_local = None
     model_is_temp = False
@@ -104,18 +134,48 @@ def generate_tryon(
         original_model_path = model_photo.file_path
         original_garment_path = garment_photo.file_path
 
+        # 3. Resolve local file paths (download from Cloudinary if needed)
         model_local = _get_local_path(original_model_path)
         model_is_temp = original_model_path.startswith("http")
 
         garment_local = _get_local_path(original_garment_path)
         garment_is_temp = original_garment_path.startswith("http")
 
-        # 4. Run AI generation via Replicate
-        print(f"[TryOn] Starting Replicate generation for user {current_user.id}")
-        result_url = _try_generate_replicate(model_local, garment_local)
-        print(f"[TryOn] Replicate returned result URL: {result_url}")
+        # 4. Run AI generation via Gemini
+        print(f"[TryOn] Starting Gemini try-on for user {current_user.id}")
+        image_bytes = _try_generate_gemini(model_local, garment_local)
+        print(f"[TryOn] Gemini returned {len(image_bytes)} bytes")
 
-        # 5. Save record + deduct credits (only on success)
+        # 5. Save result image
+        result_filename = f"{uuid.uuid4().hex}.png"
+        final_result_path = os.path.join("uploads", "results", result_filename)
+        os.makedirs(os.path.dirname(final_result_path), exist_ok=True)
+
+        with open(final_result_path, "wb") as f:
+            f.write(image_bytes)
+
+        # 6. Upload result to Cloudinary if configured, else serve locally
+        try:
+            from cloudinary_helper import is_cloudinary_configured, upload_to_cloudinary
+            if is_cloudinary_configured():
+                result_url = upload_to_cloudinary(image_bytes, "fitai/results")
+                os.remove(final_result_path)
+            else:
+                base_url = os.getenv("BASE_URL", "").rstrip("/")
+                result_url = (
+                    f"{base_url}/uploads/results/{result_filename}"
+                    if base_url
+                    else f"uploads/results/{result_filename}"
+                )
+        except Exception:
+            base_url = os.getenv("BASE_URL", "").rstrip("/")
+            result_url = (
+                f"{base_url}/uploads/results/{result_filename}"
+                if base_url
+                else f"uploads/results/{result_filename}"
+            )
+
+        # 7. Save record + deduct credits ONLY on success
         new_result = models.TryOnJob(
             user_id       = current_user.id,
             user_photo_id = model_photo.id,
@@ -132,7 +192,7 @@ def generate_tryon(
         ))
         db.commit()
         db.refresh(new_result)
-        print(f"[TryOn] Job {new_result.id} saved successfully.")
+        print(f"[TryOn] Job {new_result.id} saved. URL: {result_url}")
         return new_result
 
     except HTTPException:
@@ -144,19 +204,21 @@ def generate_tryon(
         print(f"[TryOn] Generation error: {e}")
         error_msg = str(e)
 
-        if "REPLICATE_API_TOKEN" in error_msg:
-            user_msg = "The AI service is not configured. Please contact support."
-        elif "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
-            user_msg = "Invalid API token for the AI service. Please contact support."
-        elif "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
-            user_msg = "The AI generation timed out. Please try again."
+        if "GEMINI_API_KEY" in error_msg:
+            user_msg = "AI service is not configured. Please contact support."
+        elif "quota" in error_msg.lower() or "rate" in error_msg.lower() or "429" in error_msg:
+            user_msg = "AI service rate limit reached. Please wait a minute and try again."
+        elif "refused" in error_msg.lower() or "safety" in error_msg.lower():
+            user_msg = "The AI could not process these images due to content guidelines. Try different photos."
+        elif "did not return an image" in error_msg:
+            user_msg = "The AI generation did not produce an image. Please try again with clearer photos."
         else:
             user_msg = f"Try-on generation failed: {error_msg}"
 
         raise HTTPException(status_code=503, detail=user_msg)
 
     finally:
-        # Clean up temp files downloaded from Cloudinary
+        # Clean up any temp files downloaded from Cloudinary
         if model_is_temp and model_local and os.path.exists(model_local):
             os.remove(model_local)
         if garment_is_temp and garment_local and os.path.exists(garment_local):
@@ -169,11 +231,13 @@ def get_tryon_history(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     """Get all past virtual try-on generations for the current user."""
-    jobs = db.query(models.TryOnJob)\
-             .filter(models.TryOnJob.user_id == current_user.id)\
-             .filter(models.TryOnJob.status == "completed")\
-             .order_by(models.TryOnJob.created_at.desc())\
-             .all()
+    jobs = (
+        db.query(models.TryOnJob)
+        .filter(models.TryOnJob.user_id == current_user.id)
+        .filter(models.TryOnJob.status == "completed")
+        .order_by(models.TryOnJob.created_at.desc())
+        .all()
+    )
     return jobs
 
 
